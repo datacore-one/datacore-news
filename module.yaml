@@ -59,6 +59,7 @@ settings:
       - geo
 
 hooks:
+  today: commands/today-hook.md  # Adds news summary to /today
   post_install: |
     echo "News module installed."
     echo ""
