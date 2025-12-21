@@ -10,19 +10,28 @@ Called by `/today` command when news module is installed.
 
 ### News Summary
 
-A concise paragraph summarizing key headlines across global news, business, and crypto.
+Generate a **synthesized narrative paragraph** that captures the day's news themes, NOT just a list of headlines. The summary should read like a morning briefing from an analyst.
 
 ```
 NEWS SUMMARY
 ────────────
-Global: [1-2 sentence summary of major world events]
-Business: [1-2 sentence summary of market/macro news]
-Crypto: [1-2 sentence summary of crypto developments]
+[2-3 paragraph synthesis of today's news landscape]
 
-Top Stories:
-• [Most important headline 1]
-• [Most important headline 2]
-• [Most important headline 3]
+The first paragraph covers the overall market sentiment and major themes.
+The second paragraph highlights specific developments worth noting.
+The third paragraph (optional) covers crypto-specific news if relevant.
+```
+
+**Example Output:**
+
+```markdown
+### News Summary
+
+Markets are digesting the Fed's hawkish stance from yesterday's meeting, with rate cut expectations for 2025 now reduced from four to two. This shift is rippling through risk assets, with both equities and crypto showing weakness. Geopolitically, tensions remain elevated as the Australian PM announced a major intelligence review following recent security incidents.
+
+In crypto, analysts are signaling caution as Bitcoin demand metrics shrink—a potential bear market indicator according to CryptoQuant data. However, institutional interest remains strong with BlackRock's BTC ETF crossing $25B in yearly inflows despite the price slump. Ethereum developers are pushing forward with the 'Glamsterdam' upgrade aimed at addressing MEV fairness concerns.
+
+On the business front, stagflation concerns are resurfacing amid mixed economic signals, while tech continues its AI infrastructure buildout with several major funding rounds announced this week.
 ```
 
 ## Data Sources
@@ -58,22 +67,24 @@ top_crypto = sorted(crypto_items, key=lambda x: x.get('relevance_score') or 70, 
 
 ## Output Format
 
-Generate a natural paragraph summarizing each category, then list top 3 stories:
+Generate a **synthesized narrative** (2-3 paragraphs) that weaves together the key themes. Do NOT use bullet points or category headers. Write as if you're a market analyst giving a morning briefing.
+
+**Structure:**
+1. **Opening paragraph**: Overall sentiment, major macro theme, market direction
+2. **Middle paragraph**: Specific developments worth noting (crypto, tech, geopolitics)
+3. **Closing sentence** (optional): What to watch today
 
 ```markdown
 ### News Summary
 
-**Global**: Australian PM announces intelligence review following security incident. Violence continues in South Africa with multiple casualties.
+Markets are showing caution following the Fed's hawkish December meeting, with rate cut expectations for 2025 now reduced significantly. This is weighing on risk assets across the board.
 
-**Business**: Markets digest Fed's hawkish stance on rates. Stagflation concerns resurface amid mixed economic signals.
+In crypto, Bitcoin demand metrics are shrinking according to CryptoQuant—a potential bear market signal—though institutional flows remain positive with BlackRock's ETF hitting $25B in yearly inflows. The Ethereum community is focused on the upcoming 'Glamsterdam' upgrade targeting MEV fairness. Meanwhile, geopolitical tensions persist with Australia announcing a major intelligence review.
 
-**Crypto**: Bitcoin demand shrinking signals potential bear market according to analysts. Ethereum's Glamsterdam upgrade aims to address MEV fairness.
-
-**Top Stories**:
-• Fed holds rates steady, signals fewer cuts in 2025
-• Bitcoin demand shrinks as analysts signal bear market
-• Australian PM announces major intelligence review
+Key theme today: risk-off sentiment as markets reprice Fed expectations.
 ```
+
+**Tone**: Analytical, concise, professional. Like a Bloomberg terminal summary.
 
 ## Conditions
 
