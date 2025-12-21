@@ -1,0 +1,23 @@
+# OS files
+.DS_Store
+
+# Editor files
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+
+# Personal data - reveals reading habits and interests
+data/feeds.local.yaml
+data/headlines.json
+data/.processed_items.json
+
+# Keep example template tracked
+!data/feeds.example.yaml
+
+# Layered context (DIP-0002)
+CLAUDE.md
+*.local.md
+*.space.md

@@ -1,0 +1,67 @@
+# News Feeds Configuration (Example Template)
+# Copy to feeds.local.yaml and customize
+#
+# Note: Your actual feeds.local.yaml is gitignored as it reveals
+# your reading habits and interests (PRIVATE per privacy policy)
+
+feeds:
+  # Crypto
+  - name: "CoinDesk"
+    url: "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    category: crypto
+    enabled: true
+
+  - name: "CoinTelegraph"
+    url: "https://cointelegraph.com/rss"
+    category: crypto
+    enabled: true
+
+  # Tech/AI
+  - name: "TechMeme"
+    url: "https://www.techmeme.com/feed.xml"
+    category: ai-tech
+    enabled: true
+
+  # Macro/Finance
+  - name: "Yahoo Finance"
+    url: "https://finance.yahoo.com/rss/topstories"
+    category: macro
+    enabled: true
+
+  - name: "Federal Reserve"
+    url: "https://www.federalreserve.gov/feeds/press_all.xml"
+    category: fed
+    enabled: true
+
+  # Geopolitics
+  - name: "BBC World"
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml"
+    category: geopolitics
+    enabled: true
+
+# Category weights for relevance scoring
+# Higher weight = more important to your workflow
+category_weights:
+  crypto: 1.0
+  macro: 0.9
+  fed: 0.9
+  geopolitics: 0.7
+  commodities: 0.8
+  equities: 0.7
+  ai-tech: 0.8
+
+# Keywords that boost relevance score
+boost_keywords:
+  - "solana"
+  - "bitcoin"
+  - "ethereum"
+  - "interest rate"
+  - "federal reserve"
+  - "inflation"
+  - "tariff"
+
+# Keywords that reduce relevance score
+demote_keywords:
+  - "sponsored"
+  - "advertisement"
+  - "opinion"

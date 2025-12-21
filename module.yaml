@@ -1,0 +1,80 @@
+name: news
+version: "0.2.0"
+description: |
+  On-demand news aggregation with AI-scored relevance.
+  Fetches RSS feeds, scores by relevance to your work, filters by category.
+
+  Tagline: "News that matters, when you need it."
+
+author: datacore
+repository: https://github.com/datacore-one/datacore-news
+license: MIT
+
+dependencies:
+  - core@>=1.0.0
+
+optional:
+  - crm@>=0.1.0   # For contact-aware relevance boosting
+  - mail@>=0.1.0  # For newsletter URL extraction
+
+provides:
+  commands:
+    - news  # /news [category]
+
+settings:
+  enabled:
+    description: "Enable news module"
+    default: true
+
+  freshness_minutes:
+    description: "Minutes before refetching (0 = always fetch)"
+    default: 60
+
+  high_tier_threshold:
+    description: "Score threshold for high priority (0-100)"
+    default: 70
+
+  medium_tier_threshold:
+    description: "Score threshold for medium priority (0-100)"
+    default: 40
+
+  max_items_display:
+    description: "Max items to show per tier"
+    default: 10
+
+  feeds_file:
+    description: "Path to feeds configuration"
+    default: "data/feeds.local.yaml"
+
+  use_crm_context:
+    description: "Boost relevance for CRM contacts/companies"
+    default: true
+
+  categories:
+    description: "Available news categories"
+    default:
+      - crypto
+      - macro
+      - tech
+      - geo
+
+hooks:
+  post_install: |
+    echo "News module installed."
+    echo ""
+    echo "Usage: /news [category]"
+    echo ""
+    echo "Examples:"
+    echo "  /news         - All categories"
+    echo "  /news crypto  - Crypto only"
+    echo "  /news macro   - Macro/Fed/rates"
+    echo ""
+    echo "Setup:"
+    echo "  cp data/feeds.example.yaml data/feeds.local.yaml"
+    echo "  # Edit feeds.local.yaml with your sources"
+
+use_cases:
+  - "Morning news scan before trading"
+  - "Quick crypto news check"
+  - "Macro/Fed policy updates"
+  - "Stay informed on relevant topics"
