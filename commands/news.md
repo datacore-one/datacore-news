@@ -1,5 +1,46 @@
 # /news
 
+## Command Context
+
+### When to Reference News Module
+
+**Always reference when:**
+- User requests news, headlines, or market updates
+- User wants to check specific categories (crypto, macro, tech, geo)
+- User mentions staying informed or catching up on developments
+- User refers to newsletters, RSS feeds, or news sources
+
+**Key decisions the module informs:**
+- Which news items are relevant (based on CRM contacts, tags, boost keywords)
+- How to score and tier items (high/medium/low priority)
+- When to fetch fresh data vs use cached headlines
+- Which categories to display and how to filter
+- Whether to integrate newsletter URLs from inbox.org
+
+### Quick Reference
+
+| Question | Answer |
+|----------|--------|
+| What categories exist? | crypto, macro, tech, geo, all (default) |
+| How fresh is the data? | Cached <1 hour, fetched if >1 hour old |
+| What determines relevance? | Base score + CRM matches + boost keywords - demote keywords |
+| Where do headlines cache? | `.datacore/modules/news/data/headlines.json` |
+
+### Agents This Command Invokes
+
+| Agent | Purpose |
+|-------|---------|
+| (None directly) | Uses feed_fetcher.py and newsletter_integration.py scripts |
+
+### Integration Points
+
+- **CRM contacts** - `.datacore/state/crm/contacts-index.yaml` for relevance boosting
+- **Tags registry** - `.datacore/config/tags.yaml` for work-relevant topics
+- **Boost keywords** - `data/feeds.local.yaml` for user-defined terms
+- **Newsletter URLs** - Extracts from inbox.org `:research:` tasks
+
+---
+
 On-demand news aggregation with relevance scoring.
 
 ## Usage

@@ -1,5 +1,46 @@
 # News Hook: /today Integration
 
+## Command Context
+
+### When to Reference News Module
+
+**Always reference when:**
+- /today command is invoked (automatic hook)
+- User requests morning briefing or daily summary
+- User wants news integrated into their daily workflow
+- User asks about news in /today output
+
+**Key decisions the module informs:**
+- How to synthesize news into narrative paragraph (not bullet points)
+- Which items to include (past 24 hours, high/medium tier only)
+- How to structure the summary (macro theme → specific developments → crypto)
+- When to fetch fresh headlines (if >4 hours old)
+- Tone and style (analytical, Bloomberg-like)
+
+### Quick Reference
+
+| Question | Answer |
+|----------|--------|
+| What format to use? | Synthesized narrative paragraph (2-3 paragraphs) |
+| What items to include? | Past 24 hours, high/medium tier, grouped by category |
+| When to refresh data? | If headlines >4 hours old, fetch fresh first |
+| What tone to use? | Analytical, concise, professional (like Bloomberg) |
+
+### Agents This Command Invokes
+
+| Agent | Purpose |
+|-------|---------|
+| (None directly) | Reads from headlines.json, may call feed_fetcher.py if stale |
+
+### Integration Points
+
+- **/today command** - Parent command that calls this hook
+- **headlines.json** - Data source for news items
+- **feed_fetcher.py** - Refreshes headlines if stale (>4 hours)
+- **News scoring** - Uses relevance scores to select top items
+
+---
+
 This hook adds a news summary paragraph to the daily briefing.
 
 ## Trigger
