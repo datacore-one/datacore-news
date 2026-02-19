@@ -95,7 +95,7 @@ Load relevance boosters from:
 - Organizations → boost if mentioned
 
 **Tags** (`.datacore/config/tags.yaml`):
-- Work areas (datafund, verity, datacore)
+- Work areas (configured in tags.yaml)
 - Focus areas from user's system
 
 **Boost keywords** (`data/feeds.local.yaml`):

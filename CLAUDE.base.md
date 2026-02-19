@@ -39,7 +39,7 @@ Base scores by category, then modifiers:
 ## Context Sources
 
 - **CRM contacts** - Boost news about known entities
-- **Tags** - Work areas (datafund, verity)
+- **Tags** - Work areas (configured in tags.yaml)
 - **feeds.local.yaml** - User boost/demote keywords
 - **inbox.org** - Newsletter URLs with :research: tag
 
