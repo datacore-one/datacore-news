@@ -1,3 +1,14 @@
+---
+name: news
+description: news command
+recall:
+  # DIP-0029 default — engrams scoped to this command + tag-matched.
+  scopes:
+    - command:news
+  tags:
+    - news
+---
+
 # /news
 
 ## Command Context
