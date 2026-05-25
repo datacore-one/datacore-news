@@ -1,0 +1,28 @@
+# Tracked Themes — TEMPLATE (safe to commit)
+#
+# Copy this file to `tracked_themes.local.yaml` and customize with the
+# themes that matter to YOU. The `.local.yaml` is gitignored — it reveals
+# your strategic focus and reading habits and should stay private.
+#
+# Each enabled theme triggers one Exa search per /today briefing, with
+# results from the last N days surfaced in the "Tracked Themes" section.
+#
+# Read by today_orchestrator.gather_tracked_themes().
+
+themes:
+  - name: example-theme
+    query: "Replace this with a search query that matters to you"
+    category: example
+    enabled: false  # set to true after customizing
+
+  # Example shape — uncomment and adapt:
+  # - name: my-area
+  #   query: "specific keywords that surface stories you care about"
+  #   category: work-area
+  #   enabled: true
+
+settings:
+  exa_num_results: 5         # Stories per theme
+  lookback_days: 7           # Surface stories from last N days
+  exclude_already_seen: true # Skip URLs already in headlines.json
+  max_themes_per_run: 15     # Safety cap on Exa calls per briefing

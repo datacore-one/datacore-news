@@ -11,11 +11,13 @@ __pycache__/
 
 # Personal data - reveals reading habits and interests
 data/feeds.local.yaml
+data/tracked_themes.local.yaml
 data/headlines.json
 data/.processed_items.json
 
-# Keep example template tracked
+# Keep example templates tracked
 !data/feeds.example.yaml
+!data/tracked_themes.example.yaml
 
 # Layered context (DIP-0002)
 CLAUDE.md
