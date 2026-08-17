@@ -18,11 +18,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+# feedparser lives in .datacore/venv — system python is PEP-668 managed and
+# cannot host it. Callers invoke this as a bare `python3`, so put the venv on
+# sys.path before importing. No-op under the venv interpreter itself.
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+try:
+    import venv_bootstrap
+
+    venv_bootstrap.activate()
+except ImportError:
+    pass
+
 # Try to import feedparser, provide helpful error if missing
 try:
     import feedparser
 except ImportError:
-    print("Error: feedparser not installed. Run: pip install feedparser")
+    print(
+        "Error: feedparser not installed. Run: "
+        ".datacore/venv/bin/pip install -r .datacore/lib/requirements.txt"
+    )
     sys.exit(1)
 
 try:
