@@ -60,20 +60,12 @@ settings:
       - geo
 
 hooks:
-  today: commands/today-hook.md  # Adds news summary to /today
-  post_install: |
-    echo "News module installed."
-    echo ""
-    echo "Usage: /news [category]"
-    echo ""
-    echo "Examples:"
-    echo "  /news         - All categories"
-    echo "  /news crypto  - Crypto only"
-    echo "  /news macro   - Macro/Fed/rates"
-    echo ""
-    echo "Setup:"
-    echo "  cp data/feeds.example.yaml data/feeds.local.yaml"
-    echo "  # Edit feeds.local.yaml with your sources"
+  today:
+    - section: the_world
+      agent: the-world
+      prompt: commands/today-hook.md
+      stage: gather
+      refresh: false
 
 use_cases:
   - "Morning news scan before trading"
