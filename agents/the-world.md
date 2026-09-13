@@ -43,18 +43,18 @@ Wiring this into `module.yaml` is a separate job. Do not edit manifests.
 
 | Input | Path / command |
 |---|---|
-| Headline store | `.datacore/modules/news/data/headlines.json` |
+| Headline store | `[selected-space]/.datacore/module-data/news/data/headlines.json` |
 | Store API | `.datacore/modules/news/lib/news_store.py` (`NewsStore`) |
-| Feed list (9 feeds) | `.datacore/modules/news/data/feeds.local.yaml` |
-| Tracked themes | `.datacore/modules/news/data/tracked_themes.local.yaml` |
-| Refresh (only if stale) | `python3 .datacore/modules/news/lib/feed_fetcher.py` |
+| Feed list (9 feeds) | `[selected-space]/.datacore/module-data/news/data/feeds.local.yaml` |
+| Tracked themes | `[selected-space]/.datacore/module-data/news/data/tracked_themes.local.yaml` |
+| Refresh (only if stale) | `"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/feed_fetcher.py"` |
 | The principal's live work | `~/.datacore/cos/briefings/{today}/app-briefing.json` |
 
 Load the store like this. Note `scored_only=False` — it is not optional, see
 "The scoring gap":
 
 ```python
-import sys; sys.path.insert(0, ".datacore/modules/news/lib")
+import os, sys; sys.path.insert(0, os.environ['DATACORE_NEWS_CODE'] + '/lib')
 from news_store import NewsStore
 store = NewsStore()
 items = store.get_recent_items(hours=24, scored_only=False)
@@ -158,7 +158,7 @@ which producer owns it, and since when. Compute "since when" from the file's
 
 | Failure | What you write |
 |---|---|
-| `headlines.json` missing | `No headline store. The news module's feed fetcher (box-news, 03:00 UTC) has produced nothing at .datacore/modules/news/data/headlines.json.` Then stop — the section is that line. |
+| `headlines.json` missing | `No headline store. The news module's feed fetcher (box-news, 03:00 UTC) has produced nothing at [selected-space]/.datacore/module-data/news/data/headlines.json.` Then stop — the section is that line. |
 | Store stale > 4h and fetch failed | Write the section from the stale store, and open with `Headlines last fetched {last_updated} ({N}h old) — the fetcher did not run this morning. What follows is {N} hours behind.` |
 | Store present but unscored | Write the section, and append the scorer line from "The scoring gap". |
 | A specific feed absent from `by_source` | One line: `{Feed} contributed nothing in this window.` Do not silently narrow coverage. |

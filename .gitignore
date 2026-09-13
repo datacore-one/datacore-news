@@ -8,16 +8,14 @@
 # Python
 __pycache__/
 *.pyc
+.pytest_cache/
+.core-test/
+.test-venv/
 
-# Personal data - reveals reading habits and interests
-data/feeds.local.yaml
-data/tracked_themes.local.yaml
-data/headlines.json
-data/.processed_items.json
-
-# Keep example templates tracked
-!data/feeds.example.yaml
-!data/tracked_themes.example.yaml
+# Retained legacy private state. Public templates belong in examples/.
+data/
+state/
+settings.local.yaml
 
 # Layered context (DIP-0002)
 CLAUDE.md

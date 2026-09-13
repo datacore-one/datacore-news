@@ -18,32 +18,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-# feedparser lives in .datacore/venv — system python is PEP-668 managed and
-# cannot host it. Callers invoke this as a bare `python3`, so put the venv on
-# sys.path before importing. No-op under the venv interpreter itself.
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
-try:
-    import venv_bootstrap
-
-    venv_bootstrap.activate()
-except ImportError:
-    pass
-
-# Try to import feedparser, provide helpful error if missing
-try:
-    import feedparser
-except ImportError:
-    print(
-        "Error: feedparser not installed. Run: "
-        ".datacore/venv/bin/pip install -r .datacore/lib/requirements.txt"
-    )
-    sys.exit(1)
-
-try:
-    import yaml
-except ImportError:
-    print("Error: PyYAML not installed. Run: pip install pyyaml")
-    sys.exit(1)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from news_context import context, MODULE_DIR
+from news_store import NewsStore
+from module_context import parse_json, read_text
+from file_utils import atomic_write_json, file_lock
+from public_download import download
+from yaml_safety import UniqueStringKeyLoader
+import feedparser
+import yaml
 
 # Setup logging
 logging.basicConfig(
@@ -52,53 +35,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Module paths
-MODULE_DIR = Path(__file__).parent.parent
-DATA_DIR = MODULE_DIR / "data"
-FEEDS_FILE = DATA_DIR / "feeds.local.yaml"
-FEEDS_EXAMPLE = DATA_DIR / "feeds.example.yaml"
-HEADLINES_FILE = DATA_DIR / "headlines.json"
-PROCESSED_FILE = DATA_DIR / ".processed_items.json"
+def _data_file(name):
+    return context().data / name
 
 
 def load_feeds_config() -> dict:
-    """Load feeds configuration from YAML file."""
-    config_file = FEEDS_FILE if FEEDS_FILE.exists() else FEEDS_EXAMPLE
-
-    if not config_file.exists():
-        logger.error(f"No feeds config found. Create {FEEDS_FILE}")
-        return {"feeds": []}
-
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f) or {}
-
-    logger.info(f"Loaded {len(config.get('feeds', []))} feeds from {config_file.name}")
+    selected = context(create=False)
+    local = selected.data / 'feeds.local.yaml'
+    raw = read_text(selected.space, local, limit=1024**2)
+    if raw is None:
+        example = MODULE_DIR / 'examples/feeds.example.yaml'
+        raw = read_text(MODULE_DIR, example, limit=1024**2)
+    if raw is None:
+        raise ValueError('news feed configuration is missing')
+    config = yaml.load(raw, Loader=UniqueStringKeyLoader)
+    if not isinstance(config, dict) or not isinstance(config.get('feeds'), list) or len(config['feeds']) > 64:
+        raise ValueError('invalid or oversized news feed configuration')
+    if any(not isinstance(feed, dict) for feed in config['feeds']):
+        raise ValueError('invalid news feed entry')
     return config
 
 
 def load_processed_items() -> set:
-    """Load set of already processed item IDs."""
-    if not PROCESSED_FILE.exists():
+    selected = context(create=False)
+    raw = read_text(selected.space, selected.data / '.processed_items.json')
+    if raw is None:
         return set()
-
-    try:
-        with open(PROCESSED_FILE, 'r') as f:
-            data = json.load(f)
-            return set(data.get('processed_ids', []))
-    except Exception as e:
-        logger.warning(f"Failed to load processed items: {e}")
-        return set()
+    data = parse_json(raw)
+    if (not isinstance(data, dict) or not isinstance(data.get('processed_ids'), list)
+            or any(not isinstance(item, str) or not item for item in data['processed_ids'])):
+        raise ValueError('invalid processed news identities; original preserved')
+    return set(data['processed_ids'])
 
 
 def save_processed_items(processed_ids: set):
-    """Save set of processed item IDs."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    with open(PROCESSED_FILE, 'w') as f:
-        json.dump({
-            'last_updated': datetime.now(timezone.utc).isoformat(),
-            'processed_ids': list(processed_ids)
-        }, f, indent=2)
+    if any(not isinstance(item, str) or not item for item in processed_ids):
+        raise ValueError('invalid processed news identities')
+    target = _data_file('.processed_items.json')
+    with file_lock(target):
+        combined = load_processed_items() | processed_ids
+        data = {'last_updated': datetime.now(timezone.utc).isoformat(), 'processed_ids': sorted(combined)}
+        if len(json.dumps(data, indent=2).encode()) + 1 > 16 * 1024**2:
+            raise ValueError('processed identity store exceeds limit; explicit archival required')
+        atomic_write_json(target, data)
 
 
 def generate_item_id(item: dict, feed_name: str) -> str:
@@ -106,12 +85,12 @@ def generate_item_id(item: dict, feed_name: str) -> str:
     # Use link as primary ID, fallback to title+date hash
     link = item.get('link', '')
     if link:
-        return hashlib.md5(link.encode()).hexdigest()[:16]
+        return hashlib.sha256(link.encode()).hexdigest()
 
     title = item.get('title', '')
     date = item.get('published', item.get('updated', ''))
     content = f"{feed_name}:{title}:{date}"
-    return hashlib.md5(content.encode()).hexdigest()[:16]
+    return hashlib.sha256(content.encode()).hexdigest()
 
 
 def parse_feed(feed_config: dict) -> list:
@@ -132,10 +111,10 @@ def parse_feed(feed_config: dict) -> list:
     logger.info(f"Fetching: {name}")
 
     try:
-        feed = feedparser.parse(url)
+        feed = feedparser.parse(download(url, max_bytes=4 * 1024**2))
 
         if feed.bozo and feed.bozo_exception:
-            logger.warning(f"Feed parse warning for {name}: {feed.bozo_exception}")
+            raise ValueError('invalid RSS response')
 
         items = []
         for entry in feed.entries[:20]:  # Limit to 20 most recent
@@ -161,9 +140,8 @@ def parse_feed(feed_config: dict) -> list:
         logger.info(f"  Found {len(items)} items from {name}")
         return items
 
-    except Exception as e:
-        logger.error(f"Failed to fetch {name}: {e}")
-        return []
+    except Exception:
+        raise ValueError('news feed retrieval or parsing failed') from None
 
 
 def fetch_all_feeds(config: dict, processed_ids: set) -> list:
@@ -192,28 +170,13 @@ def fetch_all_feeds(config: dict, processed_ids: set) -> list:
 
 
 def load_headlines() -> dict:
-    """Load existing headlines from JSON file."""
-    if not HEADLINES_FILE.exists():
-        return {
-            'items': [],
-            'last_updated': None,
-            'stats': {}
-        }
-
-    try:
-        with open(HEADLINES_FILE, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.warning(f"Failed to load headlines: {e}")
-        return {'items': [], 'last_updated': None, 'stats': {}}
+    return NewsStore()._load()
 
 
 def save_headlines(headlines: dict):
-    """Save headlines to JSON file."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    with open(HEADLINES_FILE, 'w') as f:
-        json.dump(headlines, f, indent=2, default=str)
+    """Merge additions while preserving existing scores and annotations."""
+    NewsStore._validate(headlines)
+    return NewsStore().add_items(headlines['items'])
 
 
 def apply_keyword_boost(item: dict, config: dict) -> int:
@@ -267,54 +230,19 @@ def fetch_and_store(dry_run: bool = False) -> dict:
         item['relevance_score'] = None
         item['tier'] = None
 
-    # Load existing headlines and merge
-    headlines = load_headlines()
-    existing_ids = {item['id'] for item in headlines.get('items', [])}
-
-    # Add only truly new items
-    truly_new = [item for item in new_items if item['id'] not in existing_ids]
-
-    if truly_new:
-        headlines['items'] = truly_new + headlines.get('items', [])
-
-        # Keep only last 500 items
-        headlines['items'] = headlines['items'][:500]
-
-    # Update stats
-    headlines['last_updated'] = datetime.now(timezone.utc).isoformat()
-    headlines['stats'] = {
-        'total_items': len(headlines['items']),
-        'unscored': len([i for i in headlines['items'] if i.get('relevance_score') is None]),
-        'high_tier': len([i for i in headlines['items'] if i.get('tier') == 'high']),
-        'medium_tier': len([i for i in headlines['items'] if i.get('tier') == 'medium']),
-        'low_tier': len([i for i in headlines['items'] if i.get('tier') == 'low']),
-        'by_category': {},
-        'by_source': {},
-    }
-
-    # Count by category and source
-    for item in headlines['items']:
-        cat = item.get('category', 'unknown')
-        src = item.get('source', 'unknown')
-        headlines['stats']['by_category'][cat] = headlines['stats']['by_category'].get(cat, 0) + 1
-        headlines['stats']['by_source'][src] = headlines['stats']['by_source'].get(src, 0) + 1
-
-    # Save
-    save_headlines(headlines)
-
-    # Update processed IDs
-    new_processed = processed_ids | {item['id'] for item in new_items}
-    # Keep only last 2000 processed IDs to prevent unbounded growth
-    if len(new_processed) > 2000:
-        new_processed = set(list(new_processed)[-2000:])
-    save_processed_items(new_processed)
-
-    return {
-        'status': 'success',
-        'new_items_count': len(truly_new),
-        'total_items': len(headlines['items']),
-        'stats': headlines['stats']
-    }
+    # A repeated feed entry cannot reset a scored item, and concurrent writers
+    # merge under the same store lock. Retention is an explicit archived action.
+    additions = {}
+    for item in new_items:
+        additions.setdefault(item['id'], item)
+    store = NewsStore()
+    added = store.add_items(list(additions.values()))
+    # Publication precedes fetch-history acknowledgement. A crash here retries
+    # idempotently against the retained authoritative items.
+    save_processed_items({item['id'] for item in new_items})
+    stats = store.get_stats()
+    return {'status': 'success', 'new_items_count': added,
+            'total_items': stats['total_items'], 'stats': stats}
 
 
 def main():

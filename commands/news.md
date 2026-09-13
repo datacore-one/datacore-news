@@ -35,7 +35,7 @@ recall:
 | What categories exist? | crypto, macro, tech, geo, all (default) |
 | How fresh is the data? | Cached <1 hour, fetched if >1 hour old |
 | What determines relevance? | Base score + CRM matches + boost keywords - demote keywords |
-| Where do headlines cache? | `.datacore/modules/news/data/headlines.json` |
+| Where do headlines cache? | `[selected-space]/.datacore/module-data/news/data/headlines.json` |
 
 ### Agents This Command Invokes
 
@@ -47,7 +47,7 @@ recall:
 
 - **CRM contacts** - `.datacore/state/crm/contacts-index.yaml` for relevance boosting
 - **Tags registry** - `.datacore/config/tags.yaml` for work-relevant topics
-- **Boost keywords** - `data/feeds.local.yaml` for user-defined terms
+- **Boost keywords** - `[selected-space]/.datacore/module-data/news/data/feeds.local.yaml` for user-defined terms
 - **Newsletter URLs** - Extracts from inbox.org `:research:` tasks
 
 ---
@@ -68,7 +68,7 @@ On-demand news aggregation with relevance scoring.
 
 ### Step 1: Check Freshness
 
-Read last fetch timestamp from `data/headlines.json`:
+Read last fetch timestamp from `[selected-space]/.datacore/module-data/news/data/headlines.json`:
 - If <1 hour old: skip fetch, use cached
 - If >1 hour old: fetch new items
 
@@ -85,13 +85,13 @@ last_updated = data.get('last_updated')
 If stale, run feed fetcher:
 
 ```bash
-python3 .datacore/modules/news/lib/feed_fetcher.py
+"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/feed_fetcher.py"
 ```
 
 Also collect newsletter URLs from inbox.org:
 
 ```bash
-python3 .datacore/modules/news/lib/newsletter_integration.py --add-queue
+"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/newsletter_integration.py" --add-queue
 ```
 
 Report: "Fetched X new items from Y feeds"
@@ -109,7 +109,7 @@ Load relevance boosters from:
 - Work areas (configured in tags.yaml)
 - Focus areas from user's system
 
-**Boost keywords** (`data/feeds.local.yaml`):
+**Boost keywords** (`[selected-space]/.datacore/module-data/news/data/feeds.local.yaml`):
 - User-defined keywords like "solana", "FOMC", etc.
 
 ### Step 4: Score Unscored Items
@@ -195,7 +195,7 @@ Options:
 **No feeds configured:**
 ```
 No feeds configured. Copy the template:
-  cp data/feeds.example.yaml data/feeds.local.yaml
+  Copy examples/feeds.example.yaml to the verified private data directory only if feeds.local.yaml is absent.
 ```
 
 **All feeds failing:**

@@ -31,15 +31,15 @@ Base score per category, then modifiers: +15 CRM contact mention, +10 boost keyw
 
 | Path | Purpose |
 |------|---------|
-| `data/feeds.local.yaml` | Feed sources + boost/demote keywords (gitignored) |
-| `data/headlines.json` | Cached headlines (gitignored) |
+| `[selected-space]/.datacore/module-data/news/data/feeds.local.yaml` | Feed sources + boost/demote keywords (gitignored) |
+| `[selected-space]/.datacore/module-data/news/data/headlines.json` | Cached headlines (gitignored) |
 | `lib/feed_fetcher.py` | RSS fetching |
 | `lib/news_store.py` | Data persistence |
 
 ## Setup
 
 ```
-cp data/feeds.example.yaml data/feeds.local.yaml
+Copy examples/feeds.example.yaml to the verified private data directory only if feeds.local.yaml is absent.
 # Edit with your RSS sources and keywords
 ```
 

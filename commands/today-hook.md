@@ -88,7 +88,7 @@ On the business front, stagflation concerns are resurfacing amid mixed economic 
 
 ## Data Sources
 
-1. **Load headlines**: Read from `.datacore/modules/news/data/headlines.json`
+1. **Load headlines**: Read from `[selected-space]/.datacore/module-data/news/data/headlines.json`
 2. **Filter recent**: Only items from past 24 hours
 3. **Group by category**: geopolitics → Global, macro/fed → Business, crypto → Crypto
 4. **Select top items**: Highest scored items per category
@@ -97,7 +97,8 @@ On the business front, stagflation concerns are resurfacing amid mixed economic 
 
 ```python
 import sys
-sys.path.insert(0, '.datacore/modules/news/lib')
+import os
+sys.path.insert(0, os.environ['DATACORE_NEWS_CODE'] + '/lib')
 from news_store import NewsStore
 
 store = NewsStore()
@@ -142,7 +143,7 @@ Key theme today: risk-off sentiment as markets reprice Fed expectations.
 
 | Condition | Behavior |
 |-----------|----------|
-| No headlines cached | Fetch fresh: `python3 .datacore/modules/news/lib/feed_fetcher.py` |
+| No headlines cached | Fetch fresh: `"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/feed_fetcher.py"` |
 | Headlines >4 hours old | Fetch fresh before summarizing |
 | No items in category | Skip that category line |
 | All categories empty | Show "No recent news available" |

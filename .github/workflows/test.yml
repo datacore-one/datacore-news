@@ -1,0 +1,38 @@
+name: News invariants
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  preservation:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.12', '3.14']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: datacore-one/datacore
+          ref: 5b445074312258fca302cdb7336ef53a9671e012
+          path: .core-test
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install declared test environment
+        run: |
+          python -m venv .test-venv
+          .test-venv/bin/python -m pip --isolated install --index-url https://pypi.org/simple --require-hashes --only-binary=:all: -r requirements-test.txt
+          .test-venv/bin/python -m pip check
+      - name: Verify data preservation and scoped runtime behavior
+        env:
+          DATACORE_LIB: ${{ github.workspace }}/.core-test/.datacore/lib
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+        run: |
+          .test-venv/bin/python -m compileall -q lib
+          .test-venv/bin/python -m pytest -q tests
