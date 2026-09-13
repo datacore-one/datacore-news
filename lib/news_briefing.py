@@ -30,7 +30,7 @@ def generate_briefing_data(hours: int = 24) -> dict:
     """
     store = NewsStore()
     stats = store.get_stats()
-    briefing_items = store.get_briefing_items(limit=15)
+    briefing_items = store.get_briefing_items(limit=15, hours=hours)
 
     # Calculate time-based stats
     recent_items = store.get_recent_items(hours=hours)

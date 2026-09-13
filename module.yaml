@@ -44,8 +44,8 @@ settings:
     default: 10
 
   feeds_file:
-    description: "Path to feeds configuration"
-    default: "data/feeds.local.yaml"
+    description: "Filename within the canonical private module data directory"
+    default: "feeds.local.yaml"
 
   use_crm_context:
     description: "Boost relevance for CRM contacts/companies"

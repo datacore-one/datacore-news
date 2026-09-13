@@ -19,25 +19,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional
 
-# Module paths
-MODULE_DIR = Path(__file__).parent.parent
-DATA_DIR = MODULE_DIR / "data"
-DATACORE_ROOT = MODULE_DIR.parent.parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from news_context import context
+from module_context import read_text
 
 
 def find_inbox_file() -> Optional[Path]:
-    """Find inbox.org in personal space."""
-    # Try common locations
-    candidates = [
-        DATACORE_ROOT / "0-personal" / "org" / "inbox.org",
-        Path.home() / "Data" / "0-personal" / "org" / "inbox.org",
-    ]
-
-    for path in candidates:
-        if path.exists():
-            return path
-
-    return None
+    """Use only the declared canonical module space, never another HOME."""
+    selected = context(create=False)
+    path = selected.space / 'org/inbox.org'
+    return path if read_text(selected.space, path) is not None else None
 
 
 def parse_org_item(lines: List[str]) -> Dict:
@@ -137,8 +128,9 @@ def read_inbox_items(inbox_path: Path, tag_filter: str = 'research') -> List[Dic
     if not inbox_path.exists():
         return []
 
-    with open(inbox_path, 'r') as f:
-        content = f.read()
+    content = read_text(context(create=False).space, inbox_path)
+    if content is None:
+        return []
 
     items = []
     current_item_lines = []
@@ -254,7 +246,7 @@ def add_to_news_queue(url_entries: List[Dict], deduplicate: bool = True) -> Dict
             continue
 
         # Create news item format
-        item_id = hashlib.md5(url.encode()).hexdigest()[:16]
+        item_id = hashlib.sha256(url.encode()).hexdigest()
 
         news_item = {
             'id': item_id,
@@ -273,12 +265,10 @@ def add_to_news_queue(url_entries: List[Dict], deduplicate: bool = True) -> Dict
         }
 
         # Add to store
-        headlines = store._load()
-        headlines['items'].insert(0, news_item)
-        store._save()
-
+        count = store.add_items([news_item])
         existing_urls.add(url)
-        added += 1
+        added += count
+        skipped += 1 - count
 
     return {
         'added': added,
