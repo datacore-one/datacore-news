@@ -112,9 +112,23 @@ Load relevance boosters from:
 **Boost keywords** (`data/feeds.local.yaml`):
 - User-defined keywords like "solana", "FOMC", etc.
 
-### Step 4: Score Unscored Items
+### Step 4: Scoring — automatic since 2026-09-21, do NOT score by hand
 
-For each unscored item, calculate relevance (0-100):
+**You do not score items. `lib/news_scorer.py` does, at fetch time.**
+
+This step used to instruct an agent to walk every unscored item and write a
+score back. Nothing scheduled that, so it never ran: the store sat at 500
+items and **0 scored** for months, and every workflow that asked for news
+confluence reported "UNAVAILABLE (unscored backlog)" — which is an absence of
+evidence, not a neutral reading. `feed_fetcher.py` now scores every unscored
+item at the end of each fetch, so by the time you read the store it is done.
+
+If you find unscored items, that is a bug in the fetcher — report it rather
+than scoring around it by hand, or the two paths will disagree.
+
+The rules below are the SPECIFICATION the scorer implements. They remain here
+because they are the contract; change them here and in `news_scorer.py`
+together, or the tests in `lib/tests/test_news_scorer.py` will tell you.
 
 **Base score by category:**
 - crypto: 70

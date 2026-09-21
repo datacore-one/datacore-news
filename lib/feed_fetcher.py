@@ -45,6 +45,12 @@ except ImportError:
     print("Error: PyYAML not installed. Run: pip install pyyaml")
     sys.exit(1)
 
+# Siblings, imported by path because this script is run directly as well as
+# imported (the venv bootstrap above owns sys.path for third-party packages).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import news_scorer
+from news_store import NewsStore
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -216,26 +222,28 @@ def save_headlines(headlines: dict):
         json.dump(headlines, f, indent=2, default=str)
 
 
-def apply_keyword_boost(item: dict, config: dict) -> int:
-    """Apply keyword boost/demote to calculate base relevance modifier."""
-    boost_keywords = config.get('boost_keywords', [])
-    demote_keywords = config.get('demote_keywords', [])
+def score_unscored_items(store: Optional[NewsStore] = None) -> dict:
+    """Score every unscored item in the store and persist the result.
 
-    title_lower = item.get('title', '').lower()
-    summary_lower = item.get('summary', '').lower()
-    text = f"{title_lower} {summary_lower}"
+    Runs at fetch time rather than as a separate pass because the store keeps
+    only the newest 500 items -- roughly four days at current feed volume -- so
+    anything not scored now ages out unscored. That is what happened until
+    2026-09-21: the rules existed only as prose for an agent to run by hand,
+    nothing scheduled it, and the store held 500 items with 0 scored.
 
-    modifier = 0
+    No cap on how many are scored, for the same reason.
+    """
+    store = store or NewsStore()
+    sources = news_scorer.load_relevance_sources()
+    high, medium = news_scorer.load_thresholds()
 
-    for keyword in boost_keywords:
-        if keyword.lower() in text:
-            modifier += 10
+    scored = 0
+    for item in store.get_unscored_items():
+        score, tier = news_scorer.score_item(item, sources, high, medium)
+        if store.update_score(item['id'], score, tier):
+            scored += 1
 
-    for keyword in demote_keywords:
-        if keyword.lower() in text:
-            modifier -= 15
-
-    return modifier
+    return {'status': 'success', 'scored': scored, 'stats': store.get_stats()}
 
 
 def fetch_and_store(dry_run: bool = False) -> dict:
@@ -253,13 +261,15 @@ def fetch_and_store(dry_run: bool = False) -> dict:
             'items': new_items
         }
 
-    # Apply keyword modifiers
+    # `apply_keyword_boost` lived here and wrote `keyword_modifier` onto every
+    # item. It was a SECOND keyword rule that disagreed with the documented one
+    # in commands/news.md — it demoted by 15 where the spec says 10, and it
+    # matched raw substrings, so "fed" hit "federal" and any keyword appearing
+    # inside an HTML attribute scored. Nothing ever read the field it wrote.
+    # Removed 2026-09-21 when scoring became real: news_scorer.py now applies
+    # the documented rules, once, on word boundaries.
     category_weights = config.get('category_weights', {})
     for item in new_items:
-        # Base relevance modifier from keywords
-        item['keyword_modifier'] = apply_keyword_boost(item, config)
-
-        # Category weight
         category = item.get('category', 'general')
         item['category_weight'] = category_weights.get(category, 0.5)
 
@@ -302,6 +312,15 @@ def fetch_and_store(dry_run: bool = False) -> dict:
     # Save
     save_headlines(headlines)
 
+    # Scoring must never cost us the fetch: the items are on disk above and stay
+    # scorable on the next run, so a scorer fault is logged and nothing else.
+    try:
+        scoring = score_unscored_items()
+        headlines['stats'] = scoring['stats']
+    except Exception as e:
+        logger.error(f"Scoring pass failed, items left unscored: {e}")
+        scoring = {'status': 'error', 'error': str(e), 'scored': 0}
+
     # Update processed IDs
     new_processed = processed_ids | {item['id'] for item in new_items}
     # Keep only last 2000 processed IDs to prevent unbounded growth
@@ -313,6 +332,8 @@ def fetch_and_store(dry_run: bool = False) -> dict:
         'status': 'success',
         'new_items_count': len(truly_new),
         'total_items': len(headlines['items']),
+        'scored_count': scoring.get('scored', 0),
+        'scoring_status': scoring.get('status'),
         'stats': headlines['stats']
     }
 
@@ -338,6 +359,10 @@ def main():
             if not dry_run:
                 print(f"Total items: {result.get('total_items', 0)}")
                 stats = result.get('stats', {})
+                scored_line = f"Scored this run: {result.get('scored_count', 0)}"
+                if result.get('scoring_status') != 'success':
+                    scored_line += f" (scoring {result.get('scoring_status')})"
+                print(scored_line)
                 print(f"Unscored: {stats.get('unscored', 0)}")
                 print(f"High tier: {stats.get('high_tier', 0)}")
                 print(f"Medium tier: {stats.get('medium_tier', 0)}")

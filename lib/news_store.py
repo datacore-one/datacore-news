@@ -101,11 +101,17 @@ class NewsStore:
                 return item
         return None
 
-    def get_unscored_items(self, limit: int = 50) -> list:
-        """Get items that haven't been scored yet."""
+    def get_unscored_items(self, limit: Optional[int] = None) -> list:
+        """Get items that haven't been scored yet.
+
+        Unlimited by default: the feeds add 120-260 items a day and the store
+        keeps only the newest 500, so a pass capped at a fixed page size falls
+        further behind every day and the backlog ages out unscored. Pass a limit
+        only when you genuinely want a page.
+        """
         items = self._load().get('items', [])
         unscored = [i for i in items if i.get('relevance_score') is None]
-        return unscored[:limit]
+        return unscored[:limit] if limit is not None else unscored
 
     def get_items_by_tier(self, tier: str, processed: Optional[bool] = None) -> list:
         """Get items by tier (high, medium, low).
