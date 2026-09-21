@@ -268,7 +268,7 @@ class TestMissingSources:
         crm = _write(tmp_path / "contacts-index.yaml", {'contacts': [
             {'name': 'S', 'type': 'person'},
             {'name': 'an', 'type': 'person'},
-            {'name': '1000228277', 'type': 'person'},
+            {'name': '5550001111', 'type': 'person'},
             {'name': 'Datafund', 'type': 'company'},
         ]})
         assert S.load_contact_names(crm) == ['Datafund']
