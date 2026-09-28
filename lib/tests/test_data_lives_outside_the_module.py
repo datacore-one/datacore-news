@@ -55,7 +55,7 @@ def test_the_fetcher_writes_headlines_into_the_private_folder(install, monkeypat
         monkeypatch.setattr(F, name, None)
     monkeypatch.setattr(F, "fetch_all_feeds", lambda config, processed: [
         {"id": "x1", "title": "A headline", "summary": "", "category": "crypto"}])
-    monkeypatch.setattr(F, "score_unscored_items", lambda store=None: {"status": "skipped", "scored": 0, "stats": {}}, raising=False)
+    monkeypatch.setattr(F, "score_unscored_items", lambda store=None: {"status": "skipped", "scored": 0, "stats": {}})
     F.fetch_and_store()
     data = news_paths.data_dir()
     assert [i["id"] for i in json.loads((data / "headlines.json").read_text())["items"]] == ["x1"]
