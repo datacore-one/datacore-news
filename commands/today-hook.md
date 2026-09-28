@@ -88,7 +88,7 @@ On the business front, stagflation concerns are resurfacing amid mixed economic 
 
 ## Data Sources
 
-1. **Load headlines**: Read from `.datacore/modules/news/data/headlines.json`
+1. **Load headlines**: Read from `0-personal/.datacore/module-data/news/data/headlines.json`
 2. **Filter recent**: Only items from past 24 hours
 3. **Group by category**: geopolitics → Global, macro/fed → Business, crypto → Crypto
 4. **Select top items**: Highest scored items per category

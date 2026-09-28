@@ -38,7 +38,9 @@ DATACORE_DIR = MODULE_DIR.parent.parent
 # first, then the real one, and score off base alone if neither is there.
 TAGS_FILES = (DATACORE_DIR / "config" / "tags.yaml", DATACORE_DIR / "tags.yaml")
 CRM_CONTACTS_FILE = DATACORE_DIR / "state" / "crm" / "contacts-index.yaml"
-FEEDS_FILE = MODULE_DIR / "data" / "feeds.local.yaml"
+# feeds.local.yaml is user data: it lives in the space's private module-data
+# folder (news_paths, MEM-63) and is resolved when scoring runs, not at import.
+FEEDS_FILE = None
 MODULE_MANIFEST = MODULE_DIR / "module.yaml"
 
 # Base score by feed category (commands/news.md Step 4).
@@ -169,13 +171,27 @@ def load_tag_terms(tags_paths: Sequence[Path] = TAGS_FILES) -> list:
     return []
 
 
+def _private_feeds_file() -> Optional[Path]:
+    """The personal feed list, or None (logged) when the store is unresolvable."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import news_paths
+    try:
+        return news_paths.data_dir(create=False) / "feeds.local.yaml"
+    except (OSError, ValueError) as e:
+        logger.warning(f"news data folder unresolved, scoring without feed keywords: {e}")
+        return None
+
+
 def load_relevance_sources(
     crm_path: Path = CRM_CONTACTS_FILE,
     tags_paths: Sequence[Path] = TAGS_FILES,
-    feeds_path: Path = FEEDS_FILE,
+    feeds_path: Optional[Path] = None,
 ) -> RelevanceSources:
     """Load and compile the relevance sources named in commands/news.md Step 3."""
-    feeds = _read_yaml(feeds_path)
+    if feeds_path is None:
+        feeds_path = FEEDS_FILE or _private_feeds_file()
+    feeds = _read_yaml(feeds_path) if feeds_path is not None else {}
 
     # Step 3 calls the tag registry a relevance booster but Step 4 gives it no
     # modifier of its own, so its terms join the boost-keyword bucket: an item

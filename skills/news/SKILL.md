@@ -10,7 +10,7 @@ user-invocable: true
 
 !`cd ~/Data/.datacore/modules/news && python3 lib/feed_fetcher.py 2>/dev/null && python3 -c "
 import json, os
-cache = os.path.expanduser('~/Data/.datacore/modules/news/data/headlines.json')
+cache = os.path.expanduser('~/Data/0-personal/.datacore/module-data/news/data/headlines.json')
 if os.path.exists(cache):
     with open(cache) as f: data = json.load(f)
     print(f'Cached headlines: {len(data.get(\"items\", []))} items')

@@ -48,6 +48,7 @@ except ImportError:
 # Siblings, imported by path because this script is run directly as well as
 # imported (the venv bootstrap above owns sys.path for third-party packages).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import news_paths
 import news_scorer
 from news_store import NewsStore
 
@@ -58,17 +59,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Module paths
+# Module paths. User data lives in the space's private module-data folder
+# (news_paths, MEM-63); it is bound on first use, not at import, so importing
+# this module never touches a store.
 MODULE_DIR = Path(__file__).parent.parent
-DATA_DIR = MODULE_DIR / "data"
-FEEDS_FILE = DATA_DIR / "feeds.local.yaml"
-FEEDS_EXAMPLE = DATA_DIR / "feeds.example.yaml"
-HEADLINES_FILE = DATA_DIR / "headlines.json"
-PROCESSED_FILE = DATA_DIR / ".processed_items.json"
+FEEDS_EXAMPLE = news_paths.EXAMPLES_DIR / "feeds.example.yaml"
+DATA_DIR = None
+FEEDS_FILE = None
+HEADLINES_FILE = None
+PROCESSED_FILE = None
+
+
+def _bind_paths():
+    """Resolve the private data folder once; explicit (test) bindings win."""
+    global DATA_DIR, FEEDS_FILE, HEADLINES_FILE, PROCESSED_FILE
+    if DATA_DIR is None:
+        DATA_DIR = news_paths.data_dir()
+    FEEDS_FILE = FEEDS_FILE or DATA_DIR / "feeds.local.yaml"
+    HEADLINES_FILE = HEADLINES_FILE or DATA_DIR / "headlines.json"
+    PROCESSED_FILE = PROCESSED_FILE or DATA_DIR / ".processed_items.json"
 
 
 def load_feeds_config() -> dict:
     """Load feeds configuration from YAML file."""
+    _bind_paths()
     config_file = FEEDS_FILE if FEEDS_FILE.exists() else FEEDS_EXAMPLE
 
     if not config_file.exists():
@@ -84,6 +98,7 @@ def load_feeds_config() -> dict:
 
 def load_processed_items() -> set:
     """Load set of already processed item IDs."""
+    _bind_paths()
     if not PROCESSED_FILE.exists():
         return set()
 
@@ -98,6 +113,7 @@ def load_processed_items() -> set:
 
 def save_processed_items(processed_ids: set):
     """Save set of processed item IDs."""
+    _bind_paths()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     with open(PROCESSED_FILE, 'w') as f:
@@ -199,6 +215,7 @@ def fetch_all_feeds(config: dict, processed_ids: set) -> list:
 
 def load_headlines() -> dict:
     """Load existing headlines from JSON file."""
+    _bind_paths()
     if not HEADLINES_FILE.exists():
         return {
             'items': [],
@@ -216,6 +233,7 @@ def load_headlines() -> dict:
 
 def save_headlines(headlines: dict):
     """Save headlines to JSON file."""
+    _bind_paths()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     with open(HEADLINES_FILE, 'w') as f:
@@ -248,6 +266,7 @@ def score_unscored_items(store: Optional[NewsStore] = None) -> dict:
 
 def fetch_and_store(dry_run: bool = False) -> dict:
     """Fetch feeds and store new items."""
+    _bind_paths()
     config = load_feeds_config()
     processed_ids = load_processed_items()
 
