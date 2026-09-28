@@ -31,15 +31,15 @@ Base score per category, then modifiers: +15 CRM contact mention, +10 boost keyw
 
 | Path | Purpose |
 |------|---------|
-| `data/feeds.local.yaml` | Feed sources + boost/demote keywords (gitignored) |
-| `data/headlines.json` | Cached headlines (gitignored) |
+| `0-personal/.datacore/module-data/news/data/feeds.local.yaml` | Feed sources + boost/demote keywords (private space folder, MEM-63) |
+| `0-personal/.datacore/module-data/news/data/headlines.json` | Cached headlines (private space folder, MEM-63) |
 | `lib/feed_fetcher.py` | RSS fetching |
 | `lib/news_store.py` | Data persistence |
 
 ## Setup
 
 ```
-cp data/feeds.example.yaml data/feeds.local.yaml
+cp examples/feeds.example.yaml "$(python3 lib/news_paths.py --create)/feeds.local.yaml"
 # Edit with your RSS sources and keywords
 ```
 
@@ -47,7 +47,7 @@ Optional: CRM module for contact-aware relevance boosting.
 
 ## Boundaries
 
-- Feed config and headlines are PRIVATE (gitignored) -- they reveal reading habits
+- Feed config and headlines are PRIVATE (private space folder, MEM-63) -- they reveal reading habits
 - Does NOT auto-fetch or push notifications -- on-demand only
 - Hooks into `/today` for optional morning news summary
 

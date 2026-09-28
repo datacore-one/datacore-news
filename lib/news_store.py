@@ -20,14 +20,18 @@ from typing import Optional
 
 # Module paths
 MODULE_DIR = Path(__file__).parent.parent
-DATA_DIR = MODULE_DIR / "data"
-HEADLINES_FILE = DATA_DIR / "headlines.json"
 
 
 class NewsStore:
     """JSON-based storage for news headlines."""
 
-    def __init__(self, headlines_file: Path = HEADLINES_FILE):
+    def __init__(self, headlines_file: Optional[Path] = None):
+        # Default store: the space's private module-data folder (MEM-63).
+        if headlines_file is None:
+            import sys
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import news_paths
+            headlines_file = news_paths.data_dir() / "headlines.json"
         self.headlines_file = headlines_file
         self._data = None
 

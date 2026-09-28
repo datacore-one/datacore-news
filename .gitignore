@@ -9,15 +9,10 @@
 __pycache__/
 *.pyc
 
-# Personal data - reveals reading habits and interests
-data/feeds.local.yaml
-data/tracked_themes.local.yaml
-data/headlines.json
-data/.processed_items.json
-
-# Keep example templates tracked
-!data/feeds.example.yaml
-!data/tracked_themes.example.yaml
+# Personal data - reveals reading habits and interests. It lives in the
+# space's private .datacore/module-data/news/data (MEM-63); data/ here is a
+# legacy location and must never be recreated or committed.
+data/
 
 # Layered context (DIP-0002)
 CLAUDE.md

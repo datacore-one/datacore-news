@@ -21,7 +21,6 @@ from typing import List, Dict, Optional
 
 # Module paths
 MODULE_DIR = Path(__file__).parent.parent
-DATA_DIR = MODULE_DIR / "data"
 DATACORE_ROOT = MODULE_DIR.parent.parent.parent
 
 

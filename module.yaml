@@ -45,7 +45,7 @@ settings:
 
   feeds_file:
     description: "Path to feeds configuration"
-    default: "data/feeds.local.yaml"
+    default: "<personal space>/.datacore/module-data/news/data/feeds.local.yaml"
 
   use_crm_context:
     description: "Boost relevance for CRM contacts/companies"

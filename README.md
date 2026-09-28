@@ -18,7 +18,7 @@ On-demand news aggregation with relevance scoring.
 
 ```bash
 # Copy template
-cp data/feeds.example.yaml data/feeds.local.yaml
+cp examples/feeds.example.yaml "$(python3 lib/news_paths.py --create)/feeds.local.yaml"
 
 # Edit with your sources
 ```
@@ -39,7 +39,7 @@ cp data/feeds.example.yaml data/feeds.local.yaml
 
 ## Configuration
 
-`data/feeds.local.yaml`:
+`0-personal/.datacore/module-data/news/data/feeds.local.yaml`:
 ```yaml
 feeds:
   - name: "CoinDesk"
