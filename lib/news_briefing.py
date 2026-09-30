@@ -30,10 +30,12 @@ def generate_briefing_data(hours: int = 24) -> dict:
     """
     store = NewsStore()
     stats = store.get_stats()
-    briefing_items = store.get_briefing_items(limit=15)
-
-    # Calculate time-based stats
+    # Tiers hold only scored items inside the window this briefing reports
+    # covering; the store keeps ~4 days, so without this old news could lead.
     recent_items = store.get_recent_items(hours=hours)
+    ranked = sorted(recent_items, key=lambda i: i['relevance_score'], reverse=True)
+    briefing_items = {t: [i for i in ranked if i.get('tier') == t][:15]
+                      for t in ('high', 'medium', 'low')}
 
     briefing = {
         'timestamp': datetime.now(timezone.utc).isoformat(),
