@@ -25,7 +25,7 @@ recall:
 - How to synthesize news into narrative paragraph (not bullet points)
 - Which items to include (past 24 hours, high/medium tier only)
 - How to structure the summary (macro theme → specific developments → crypto)
-- When to fetch fresh headlines (if >4 hours old)
+- When to fetch fresh headlines (always, at the start of the briefing: the Mac copy is only refreshed by this step)
 - Tone and style (analytical, Bloomberg-like)
 
 ### Quick Reference
@@ -34,7 +34,7 @@ recall:
 |----------|--------|
 | What format to use? | Synthesized narrative paragraph (2-3 paragraphs) |
 | What items to include? | Past 24 hours, high/medium tier, grouped by category |
-| When to refresh data? | If headlines >4 hours old, fetch fresh first |
+| When to refresh data? | Always fetch first (Winston fetches its own copy at 03:00, and module-data does not sync, so the Mac copy is as old as the last briefing) |
 | What tone to use? | Analytical, concise, professional (like Bloomberg) |
 
 ### Agents This Command Invokes
