@@ -19,6 +19,11 @@ optional:
   - mail@>=0.1.0  # For newsletter URL extraction
 
 provides:
+  commands:
+    - news
+    - today-hook
+  agents:
+    - the-world
   skills:
     - news  # /news [category]
 
