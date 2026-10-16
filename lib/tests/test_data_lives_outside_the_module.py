@@ -42,9 +42,9 @@ def test_data_resolves_to_the_private_space_folder(install):
 
 def test_a_second_personal_space_does_not_make_the_store_ambiguous(install):
     root, space = install
-    other = root / "9-practice/.datacore"
+    other = root / "2-other/.datacore"
     other.mkdir(parents=True)
-    (other / "config.yaml").write_text("space: {name: practice, type: personal}\n")
+    (other / "config.yaml").write_text("space: {name: other, type: personal}\n")
     assert news_paths.data_dir().is_relative_to(space)
 
 

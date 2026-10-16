@@ -25,8 +25,7 @@ wanting to save something, you have misread the job.
 
 ## Registration
 
-Declared by the news module under `hooks.today` (see
-`2-datacore/1-tracks/dev/spec-today-registration-2026-09-09.md`):
+Declared by the news module under `hooks.today`:
 
 | field | value |
 |---|---|
@@ -158,7 +157,7 @@ which producer owns it, and since when. Compute "since when" from the file's
 
 | Failure | What you write |
 |---|---|
-| `headlines.json` missing | `No headline store. The news module's feed fetcher (box-news, 03:00 UTC) has produced nothing at 0-personal/.datacore/module-data/news/data/headlines.json.` Then stop — the section is that line. |
+| `headlines.json` missing | `No headline store. The news module's scheduled feed fetch has produced nothing at 0-personal/.datacore/module-data/news/data/headlines.json.` Then stop — the section is that line. |
 | Store stale > 4h and fetch failed | Write the section from the stale store, and open with `Headlines last fetched {last_updated} ({N}h old) — the fetcher did not run this morning. What follows is {N} hours behind.` |
 | Store present but unscored | Write the section, and append the scorer line from "The scoring gap". |
 | A specific feed absent from `by_source` | One line: `{Feed} contributed nothing in this window.` Do not silently narrow coverage. |
