@@ -1,0 +1,48 @@
+"""Where the news module keeps its data (MEM-63).
+
+Headlines, the processed-item ledger and the personal feed and theme lists are
+user data. They live in the selected space's private folder
+``<space>/.datacore/module-data/news/data``, resolved through the core
+``module_context`` helper -- never in this installed module. The helper refuses
+while legacy state still sits in the module's own ``data/``; move it with
+``.datacore/lib/module_data_migrate.py`` (writers stopped first).
+
+Environment: ``DATACORE_ROOT`` (default ``~/Data``), ``DATACORE_SPACE``
+(default ``personal``), ``DATACORE_LIB`` (default: the core lib beside this
+module).
+"""
+import os
+import sys
+from pathlib import Path
+
+MODULE_DIR = Path(__file__).resolve().parent.parent
+EXAMPLES_DIR = MODULE_DIR / "examples"
+
+
+def _core_lib() -> Path:
+    return Path(os.environ.get("DATACORE_LIB") or MODULE_DIR.parent.parent / "lib")
+
+
+def ensure_core_lib() -> Path:
+    """Put the core lib (module_context, file_utils, ...) on sys.path."""
+    lib = str(_core_lib())
+    if lib not in sys.path:
+        sys.path.insert(0, lib)
+    return Path(lib)
+
+
+def context(create: bool = True):
+    """The selected space's module context (root, space, name, data)."""
+    ensure_core_lib()
+    from module_context import resolve
+    root = os.environ.get("DATACORE_ROOT") or str(Path.home() / "Data")
+    space = os.environ.get("DATACORE_SPACE") or "personal"
+    return resolve("news", MODULE_DIR, root=root, space=space, create=create)
+
+
+def data_dir(create: bool = True) -> Path:
+    return context(create=create).data
+
+
+if __name__ == "__main__":
+    print(data_dir(create="--create" in sys.argv))

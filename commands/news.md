@@ -35,7 +35,7 @@ recall:
 | What categories exist? | crypto, macro, tech, geo, all (default) |
 | How fresh is the data? | Cached <1 hour, fetched if >1 hour old |
 | What determines relevance? | Base score + CRM matches + boost keywords - demote keywords |
-| Where do headlines cache? | `[selected-space]/.datacore/module-data/news/data/headlines.json` |
+| Where do headlines cache? | `0-personal/.datacore/module-data/news/data/headlines.json` |
 
 ### Agents This Command Invokes
 
@@ -47,7 +47,7 @@ recall:
 
 - **CRM contacts** - `.datacore/state/crm/contacts-index.yaml` for relevance boosting
 - **Tags registry** - `.datacore/config/tags.yaml` for work-relevant topics
-- **Boost keywords** - `[selected-space]/.datacore/module-data/news/data/feeds.local.yaml` for user-defined terms
+- **Boost keywords** - `0-personal/.datacore/module-data/news/data/feeds.local.yaml` for user-defined terms
 - **Newsletter URLs** - Extracts from inbox.org `:research:` tasks
 
 ---
@@ -68,7 +68,7 @@ On-demand news aggregation with relevance scoring.
 
 ### Step 1: Check Freshness
 
-Read last fetch timestamp from `[selected-space]/.datacore/module-data/news/data/headlines.json`:
+Read last fetch timestamp from `0-personal/.datacore/module-data/news/data/headlines.json`:
 - If <1 hour old: skip fetch, use cached
 - If >1 hour old: fetch new items
 
@@ -85,13 +85,13 @@ last_updated = data.get('last_updated')
 If stale, run feed fetcher:
 
 ```bash
-"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/feed_fetcher.py"
+python3 .datacore/modules/news/lib/feed_fetcher.py
 ```
 
 Also collect newsletter URLs from inbox.org:
 
 ```bash
-"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/newsletter_integration.py" --add-queue
+python3 .datacore/modules/news/lib/newsletter_integration.py --add-queue
 ```
 
 Report: "Fetched X new items from Y feeds"
@@ -109,12 +109,26 @@ Load relevance boosters from:
 - Work areas (configured in tags.yaml)
 - Focus areas from user's system
 
-**Boost keywords** (`[selected-space]/.datacore/module-data/news/data/feeds.local.yaml`):
+**Boost keywords** (`0-personal/.datacore/module-data/news/data/feeds.local.yaml`):
 - User-defined keywords like "solana", "FOMC", etc.
 
-### Step 4: Score Unscored Items
+### Step 4: Scoring — automatic since 2026-09-21, do NOT score by hand
 
-For each unscored item, calculate relevance (0-100):
+**You do not score items. `lib/news_scorer.py` does, at fetch time.**
+
+This step used to instruct an agent to walk every unscored item and write a
+score back. Nothing scheduled that, so it never ran: the store sat at 500
+items and **0 scored** for months, and every workflow that asked for news
+confluence reported "UNAVAILABLE (unscored backlog)" — which is an absence of
+evidence, not a neutral reading. `feed_fetcher.py` now scores every unscored
+item at the end of each fetch, so by the time you read the store it is done.
+
+If you find unscored items, that is a bug in the fetcher — report it rather
+than scoring around it by hand, or the two paths will disagree.
+
+The rules below are the SPECIFICATION the scorer implements. They remain here
+because they are the contract; change them here and in `news_scorer.py`
+together, or the tests in `lib/tests/test_news_scorer.py` will tell you.
 
 **Base score by category:**
 - crypto: 70
@@ -195,7 +209,7 @@ Options:
 **No feeds configured:**
 ```
 No feeds configured. Copy the template:
-  Copy examples/feeds.example.yaml to the verified private data directory only if feeds.local.yaml is absent.
+  cp examples/feeds.example.yaml "$(python3 lib/news_paths.py --create)/feeds.local.yaml"
 ```
 
 **All feeds failing:**

@@ -60,7 +60,7 @@ def test_default_store_uses_declared_space_instead_of_installed_code(tmp_path):
     root = tmp_path / 'selected'
     config = root / 'named/.datacore/config.yaml'
     config.parent.mkdir(parents=True)
-    config.write_text('space: {name: self, type: personal}\n')
+    config.write_text('space: {name: personal, type: personal}\n')
     data = root / 'named/.datacore/module-data/news/data'
     data.mkdir(parents=True, mode=0o700)
     data.parent.chmod(0o700)
@@ -69,7 +69,7 @@ def test_default_store_uses_declared_space_instead_of_installed_code(tmp_path):
     code = tmp_path / 'immutable-code/lib'
     code.mkdir(parents=True)
     source = Path(news_store.__file__).parent
-    for name in ('news_store.py', 'news_context.py'):
+    for name in ('news_store.py', 'news_paths.py'):
         if (source / name).exists():
             (code / name).write_bytes((source / name).read_bytes())
     script = ('import sys,json;sys.path.insert(0,sys.argv[1]);'

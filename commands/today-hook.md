@@ -25,7 +25,7 @@ recall:
 - How to synthesize news into narrative paragraph (not bullet points)
 - Which items to include (past 24 hours, high/medium tier only)
 - How to structure the summary (macro theme → specific developments → crypto)
-- When to fetch fresh headlines (if >4 hours old)
+- When to fetch fresh headlines (always, at the start of the briefing: the Mac copy is only refreshed by this step)
 - Tone and style (analytical, Bloomberg-like)
 
 ### Quick Reference
@@ -34,7 +34,7 @@ recall:
 |----------|--------|
 | What format to use? | Synthesized narrative paragraph (2-3 paragraphs) |
 | What items to include? | Past 24 hours, high/medium tier, grouped by category |
-| When to refresh data? | If headlines >4 hours old, fetch fresh first |
+| When to refresh data? | Always fetch first (the scheduled fetch host keeps its own copy, and module-data does not sync, so the local copy is as old as the last briefing) |
 | What tone to use? | Analytical, concise, professional (like Bloomberg) |
 
 ### Agents This Command Invokes
@@ -88,7 +88,7 @@ On the business front, stagflation concerns are resurfacing amid mixed economic 
 
 ## Data Sources
 
-1. **Load headlines**: Read from `[selected-space]/.datacore/module-data/news/data/headlines.json`
+1. **Load headlines**: Read from `0-personal/.datacore/module-data/news/data/headlines.json`
 2. **Filter recent**: Only items from past 24 hours
 3. **Group by category**: geopolitics → Global, macro/fed → Business, crypto → Crypto
 4. **Select top items**: Highest scored items per category
@@ -97,8 +97,7 @@ On the business front, stagflation concerns are resurfacing amid mixed economic 
 
 ```python
 import sys
-import os
-sys.path.insert(0, os.environ['DATACORE_NEWS_CODE'] + '/lib')
+sys.path.insert(0, '.datacore/modules/news/lib')
 from news_store import NewsStore
 
 store = NewsStore()
@@ -143,7 +142,7 @@ Key theme today: risk-off sentiment as markets reprice Fed expectations.
 
 | Condition | Behavior |
 |-----------|----------|
-| No headlines cached | Fetch fresh: `"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/feed_fetcher.py"` |
+| No headlines cached | Fetch fresh: `python3 .datacore/modules/news/lib/feed_fetcher.py` |
 | Headlines >4 hours old | Fetch fresh before summarizing |
 | No items in category | Skip that category line |
 | All categories empty | Show "No recent news available" |

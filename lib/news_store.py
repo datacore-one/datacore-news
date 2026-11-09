@@ -13,14 +13,16 @@ Usage:
 """
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-
-from news_context import context
-from module_context import parse_json, read_text
-from file_utils import atomic_write_text, file_lock, fsync_directory
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import news_paths  # noqa: E402
+news_paths.ensure_core_lib()
+from module_context import parse_json, read_text  # noqa: E402
+from file_utils import atomic_write_text, file_lock, fsync_directory  # noqa: E402
 
 MAX_STORE_BYTES = 16 * 1024**2
 
@@ -29,7 +31,10 @@ class NewsStore:
     """Fresh reads and serialized mutations; no stale whole-store replacement."""
 
     def __init__(self, headlines_file: Optional[Path] = None):
-        self.headlines_file = Path(headlines_file) if headlines_file is not None else context().data / 'headlines.json'
+        # Default store: the space's private module-data folder (MEM-63).
+        if headlines_file is None:
+            headlines_file = news_paths.data_dir() / 'headlines.json'
+        self.headlines_file = Path(headlines_file)
         self._data = None
         self._loaded_raw = None
 
@@ -142,11 +147,17 @@ class NewsStore:
                 return item
         return None
 
-    def get_unscored_items(self, limit: int = 50) -> list:
-        """Get items that haven't been scored yet."""
+    def get_unscored_items(self, limit: Optional[int] = None) -> list:
+        """Get items that haven't been scored yet.
+
+        Unlimited by default: the feeds add 120-260 items a day and the store
+        keeps only the newest 500, so a pass capped at a fixed page size falls
+        further behind every day and the backlog ages out unscored. Pass a limit
+        only when you genuinely want a page.
+        """
         items = self._load().get('items', [])
         unscored = [i for i in items if i.get('relevance_score') is None]
-        return unscored[:limit]
+        return unscored[:limit] if limit is not None else unscored
 
     def get_items_by_tier(self, tier: str, processed: Optional[bool] = None) -> list:
         """Get items by tier (high, medium, low).
@@ -222,6 +233,26 @@ class NewsStore:
             return False
         return self._mutate(update)
 
+    def update_scores(self, scores: dict) -> int:
+        """Score many items in one locked mutation: {item_id: (score, tier)}.
+
+        Only items still unscored are written, so a concurrent pass that scored
+        an item first keeps its result. Returns the number of items scored.
+        """
+        for score, tier in scores.values():
+            if type(score) is not int or not 0 <= score <= 100 or tier not in ('high', 'medium', 'low'):
+                raise ValueError('invalid news score or tier')
+        def update(data):
+            now = datetime.now(timezone.utc).isoformat()
+            count = 0
+            for item in data['items']:
+                if item['id'] in scores and item.get('relevance_score') is None:
+                    score, tier = scores[item['id']]
+                    item.update(relevance_score=score, tier=tier, scored_at=now)
+                    count += 1
+            return count
+        return self._mutate(update) if scores else 0
+
     def mark_processed(self, item_id: str, output_path: Optional[str] = None) -> bool:
         """Mark an item as processed (e.g., literature note created).
 
@@ -267,29 +298,33 @@ class NewsStore:
             'stats': self.get_stats()
         }
 
-    def cleanup_old_items(self, max_age_days: int = 7, max_items: int = 500) -> int:
+    def cleanup_old_items(self, max_age_days: Optional[int] = 7, max_items: int = 500) -> int:
         """Remove old items to prevent unbounded growth.
 
         Args:
-            max_age_days: Remove items older than this
+            max_age_days: Remove items older than this (None: no age limit)
             max_items: Maximum items to keep
 
         Returns:
             Number of items removed.
         """
-        if type(max_age_days) is not int or max_age_days < 0 or type(max_items) is not int or max_items < 0:
+        if ((max_age_days is not None and (type(max_age_days) is not int or max_age_days < 0))
+                or type(max_items) is not int or max_items < 0):
             raise ValueError('invalid retention limits')
         def cleanup(data):
-            cutoff = datetime.now(timezone.utc).timestamp() - max_age_days * 86400
+            cutoff = (None if max_age_days is None
+                      else datetime.now(timezone.utc).timestamp() - max_age_days * 86400)
             recent, retired = [], []
             for item in data['items']:
-                try:
-                    published = datetime.fromisoformat(item['published'].replace('Z', '+00:00'))
-                    if published.tzinfo is None:
-                        published = published.replace(tzinfo=timezone.utc)
-                    expired = published.timestamp() <= cutoff
-                except (ValueError, TypeError, KeyError, AttributeError):
-                    expired = False
+                expired = False
+                if cutoff is not None:
+                    try:
+                        published = datetime.fromisoformat(item['published'].replace('Z', '+00:00'))
+                        if published.tzinfo is None:
+                            published = published.replace(tzinfo=timezone.utc)
+                        expired = published.timestamp() <= cutoff
+                    except (ValueError, TypeError, KeyError, AttributeError):
+                        pass
                 (retired if expired or len(recent) >= max_items else recent).append(item)
             if retired:
                 import hashlib

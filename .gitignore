@@ -12,7 +12,9 @@ __pycache__/
 .core-test/
 .test-venv/
 
-# Retained legacy private state. Public templates belong in examples/.
+# Personal data - reveals reading habits and interests. It lives in the
+# space's private .datacore/module-data/news/data (MEM-63); data/ here is a
+# legacy location and must never be recreated or committed.
 data/
 state/
 settings.local.yaml

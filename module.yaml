@@ -19,6 +19,11 @@ optional:
   - mail@>=0.1.0  # For newsletter URL extraction
 
 provides:
+  commands:
+    - news
+    - today-hook
+  agents:
+    - the-world
   skills:
     - news  # /news [category]
 
@@ -44,8 +49,8 @@ settings:
     default: 10
 
   feeds_file:
-    description: "Filename within the canonical private module data directory"
-    default: "feeds.local.yaml"
+    description: "Path to feeds configuration"
+    default: "<personal space>/.datacore/module-data/news/data/feeds.local.yaml"
 
   use_crm_context:
     description: "Boost relevance for CRM contacts/companies"

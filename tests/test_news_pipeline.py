@@ -6,7 +6,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lib'))
 import feed_fetcher as feeds
-from news_context import context
+from news_paths import context
 from news_store import NewsStore
 import newsletter_integration as newsletters
 
@@ -16,9 +16,12 @@ def news(tmp_path, monkeypatch):
     root = tmp_path / 'root'
     space = root / 'named'
     (space / '.datacore').mkdir(parents=True)
-    (space / '.datacore/config.yaml').write_text('space: {name: self, type: personal}\n')
+    (space / '.datacore/config.yaml').write_text('space: {name: personal, type: personal}\n')
     monkeypatch.setenv('DATACORE_ROOT', str(root))
     monkeypatch.delenv('DATACORE_SPACE', raising=False)
+    # feed_fetcher binds its data paths on first use; rebind for this root.
+    for name in ('DATA_DIR', 'FEEDS_FILE', 'HEADLINES_FILE', 'PROCESSED_FILE'):
+        monkeypatch.setattr(feeds, name, None)
     monkeypatch.setattr(feeds, 'load_feeds_config', lambda: {'feeds': [{'name': 'fixture', 'url': 'https://example.invalid/rss'}]})
     return context()
 
@@ -66,10 +69,17 @@ def test_corrupt_history_cannot_be_reset_or_acknowledged(news, monkeypatch):
 
 
 def test_fetch_cannot_silently_trim_existing_annotated_news(news, monkeypatch):
+    # The store keeps the newest 500 (main's retention); what falls off the end
+    # is archived beside the store with its annotations, never dropped.
     NewsStore().add_items([{'id': str(n), 'title': 'Retained', 'summary_ai': 'retained note'} for n in range(501)])
     monkeypatch.setattr(feeds, 'fetch_all_feeds', lambda *a: [{'id': 'new', 'title': 'New'}])
-    assert feeds.fetch_and_store()['total_items'] == 502
-    assert len([i for i in NewsStore().get_all_items() if i.get('summary_ai')]) == 501
+    assert feeds.fetch_and_store()['total_items'] == 500
+    kept = [i for i in NewsStore().get_all_items() if i.get('summary_ai')]
+    archived = [i for path in (news.data / 'archive').glob('*.json')
+                for i in json.loads(path.read_text())['items']]
+    assert len(kept) == 499 and len(archived) == 2
+    assert all(i['summary_ai'] == 'retained note' for i in archived)
+    assert {i['id'] for i in kept} | {i['id'] for i in archived} == {str(n) for n in range(501)}
 
 
 @pytest.mark.parametrize('url', ['file:///etc/passwd', 'http://127.0.0.1/private', 'http://[::1]/private'])

@@ -19,9 +19,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional
 
+# Module paths
+MODULE_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from news_context import context
-from module_context import read_text
+import news_paths  # noqa: E402
+news_paths.ensure_core_lib()
+from module_context import read_text  # noqa: E402
+from news_paths import context  # noqa: E402
 
 
 def find_inbox_file() -> Optional[Path]:

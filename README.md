@@ -16,37 +16,29 @@ On-demand news aggregation with relevance scoring.
 
 ## Setup
 
-Configure an installed core, data root and qualified interpreter explicitly:
-
 ```bash
-export DATACORE_LIB=/path/to/installed/core/.datacore/lib
-export DATACORE_ROOT=/path/to/data
-export DATACORE_PYTHON=/path/to/qualified-runtime/bin/python
-export DATACORE_NEWS_CODE=/path/to/installed/news
-# Optional: DATACORE_SPACE is a canonical stable space name.
-"$DATACORE_PYTHON" -I "$DATACORE_NEWS_CODE/lib/news_briefing.py" --json
+# Copy template
+cp examples/feeds.example.yaml "$(python3 lib/news_paths.py --create)/feeds.local.yaml"
+
+# Edit with your sources
 ```
 
-Without `DATACORE_SPACE`, exactly one verified personal space is required.
-Mutable files live in that space's `.datacore/module-data/news/data/`, including
-`feeds.local.yaml`, `headlines.json`, and `.processed_items.json`. Copy
-`examples/feeds.example.yaml` to the selected private data directory only if
-no local configuration exists. Do not overwrite a configured feed list.
+Mutable files live in the selected space's private
+`.datacore/module-data/news/data/` (`DATACORE_SPACE`, default `personal`):
+`feeds.local.yaml`, `headlines.json` and `.processed_items.json`. Do not
+overwrite a configured feed list. A legacy `data/` beside the module code blocks
+use until writers are stopped and core's `module_data_migrate.py` has moved it.
 
-An existing legacy `data`, `state`, or `settings.local.yaml` beside module code
-blocks use until writers are stopped and core's `module_data_migrate.py` preserves
-and verifies it. Follow core's `.datacore/lib/RUNTIME.md`; retain backups and
-verify reads under the service identity before resuming. Example templates now
-belong in `examples/`, outside mutable state. Loading a client never migrates,
-resets or hides an existing legacy store.
+## State preservation
 
-Writers serialize fresh mutations and publish complete durable files. Retries
-deduplicate identities and URLs without erasing scores or annotations. Stale
-snapshot writers and malformed state fail explicitly. Fetching does not trim
-existing items. Explicit retention writes a durable private archive before
-removing items from the active store; archives require operator-managed backup
-and retention. A full store refuses new writes instead of silently discarding
-old data.
+Writers take a lock, re-read the store and publish a complete file atomically,
+so concurrent fetchers, scorers and newsletter imports keep each other's work.
+Retries deduplicate identities and URLs without erasing scores or annotations.
+Stale snapshot writers and malformed state fail explicitly instead of being
+reset to empty. The store keeps the newest 500 items; anything past that, and
+anything removed by explicit retention, is first written to a private
+`archive/` beside `headlines.json` (back it up and prune it yourself). A store
+over 16 MB refuses new writes instead of silently discarding old data.
 
 ## How It Works
 
@@ -64,7 +56,7 @@ old data.
 
 ## Configuration
 
-`[selected-space]/.datacore/module-data/news/data/feeds.local.yaml`:
+`0-personal/.datacore/module-data/news/data/feeds.local.yaml`:
 ```yaml
 feeds:
   - name: "CoinDesk"
@@ -84,18 +76,16 @@ demote_keywords:
 
 ## Dependencies
 
-- Python 3.10+ and a compatible installed Datacore core with `module_context.py`.
-- The core hash-locked runtime profile, including feedparser and PyYAML. Use its
-  qualified interpreter directly; News does not splice another venv into it.
+- Python 3.10+ and a Datacore core (`.datacore/lib`, or `DATACORE_LIB`) with
+  `module_context.py`, `file_utils.py`, `public_download.py` and `yaml_safety.py`.
+- feedparser and PyYAML (`requirements.txt`; the fetcher activates core's
+  `.datacore/venv` when run as a bare `python3`).
 
-RSS downloads use core's bounded transport, refuse local/private targets and
-verify TLS. Provider failures remain errors. Tests use synthetic RSS through the
-real parser and disposable stores; they do not contact live feeds.
-
-To run the regression suite, create a test venv, install `requirements-test.txt`
-with `--require-hashes --only-binary=:all:`, set `DATACORE_LIB` and run
-`python -m pytest -q tests`. CI pins the matching core commit and checks Python
-3.10, 3.12 and 3.14. Production data and external requests are unnecessary.
+RSS downloads use core's bounded transport and refuse local/private targets.
+Tests use synthetic RSS through the real parser and disposable stores; they do
+not contact live feeds. Run them with `DATACORE_LIB` pointing at a core checkout:
+`python -m pytest -q` (covers `lib/tests` and `tests`; CI runs `tests`). CI pins the matching core
+commit; `requirements-test.txt` is its hash-locked test environment.
 
 ## Optional Integrations
 
