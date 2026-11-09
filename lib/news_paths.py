@@ -23,14 +23,25 @@ def _core_lib() -> Path:
     return Path(os.environ.get("DATACORE_LIB") or MODULE_DIR.parent.parent / "lib")
 
 
-def data_dir(create: bool = True) -> Path:
+def ensure_core_lib() -> Path:
+    """Put the core lib (module_context, file_utils, ...) on sys.path."""
     lib = str(_core_lib())
     if lib not in sys.path:
         sys.path.insert(0, lib)
+    return Path(lib)
+
+
+def context(create: bool = True):
+    """The selected space's module context (root, space, name, data)."""
+    ensure_core_lib()
     from module_context import resolve
     root = os.environ.get("DATACORE_ROOT") or str(Path.home() / "Data")
     space = os.environ.get("DATACORE_SPACE") or "personal"
-    return resolve("news", MODULE_DIR, root=root, space=space, create=create).data
+    return resolve("news", MODULE_DIR, root=root, space=space, create=create)
+
+
+def data_dir(create: bool = True) -> Path:
+    return context(create=create).data
 
 
 if __name__ == "__main__":

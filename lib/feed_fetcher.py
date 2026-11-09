@@ -49,8 +49,18 @@ except ImportError:
 # imported (the venv bootstrap above owns sys.path for third-party packages).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import news_paths
+news_paths.ensure_core_lib()
 import news_scorer
 from news_store import NewsStore
+# Core helpers: bounded reads, locked atomic writes, public-only downloads.
+from module_context import parse_json, read_text
+from file_utils import atomic_write_json, file_lock
+from public_download import download
+from yaml_safety import UniqueStringKeyLoader
+
+MAX_FEED_BYTES = 4 * 1024**2
+MAX_PROCESSED_IDS = 2000
+STORE_MAX_ITEMS = 500
 
 # Setup logging
 logging.basicConfig(
@@ -89,38 +99,58 @@ def load_feeds_config() -> dict:
         logger.error(f"No feeds config found. Create {FEEDS_FILE}")
         return {"feeds": []}
 
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f) or {}
+    raw = read_text(config_file.parent, config_file, limit=1024**2)
+    config = (yaml.load(raw, Loader=UniqueStringKeyLoader) if raw else None) or {}
+    if (not isinstance(config, dict) or not isinstance(config.get('feeds', []), list)
+            or any(not isinstance(feed, dict) for feed in config.get('feeds', []))):
+        raise ValueError(f'invalid news feed configuration in {config_file.name}')
 
     logger.info(f"Loaded {len(config.get('feeds', []))} feeds from {config_file.name}")
     return config
 
 
+def _read_processed_ids() -> list:
+    """The acknowledged identities, oldest first. A corrupt ledger raises
+    rather than reading as empty: resetting it would re-acknowledge nothing
+    and hide the damage (the original file is left untouched)."""
+    _bind_paths()
+    if not PROCESSED_FILE.parent.exists():
+        return []
+    raw = read_text(PROCESSED_FILE.parent, PROCESSED_FILE)
+    if raw is None:
+        return []
+    data = parse_json(raw)
+    if (not isinstance(data, dict) or not isinstance(data.get('processed_ids'), list)
+            or any(not isinstance(item, str) or not item for item in data['processed_ids'])):
+        raise ValueError('invalid processed news identities; original preserved')
+    return data['processed_ids']
+
+
 def load_processed_items() -> set:
     """Load set of already processed item IDs."""
-    _bind_paths()
-    if not PROCESSED_FILE.exists():
-        return set()
-
-    try:
-        with open(PROCESSED_FILE, 'r') as f:
-            data = json.load(f)
-            return set(data.get('processed_ids', []))
-    except Exception as e:
-        logger.warning(f"Failed to load processed items: {e}")
-        return set()
+    return set(_read_processed_ids())
 
 
 def save_processed_items(processed_ids: set):
-    """Save set of processed item IDs."""
+    """Acknowledge fetched identities.
+
+    Merges with the ledger on disk under its lock, so a concurrent fetcher's
+    acknowledgements are kept, then keeps the newest MAX_PROCESSED_IDS to
+    prevent unbounded growth. An identity that ages out of the ledger cannot
+    duplicate a stored item: NewsStore.add_items is idempotent by id and link.
+    """
+    if any(not isinstance(item, str) or not item for item in processed_ids):
+        raise ValueError('invalid processed news identities')
     _bind_paths()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    with open(PROCESSED_FILE, 'w') as f:
-        json.dump({
+    with file_lock(PROCESSED_FILE):
+        existing = _read_processed_ids()
+        known = set(existing)
+        combined = existing + sorted(i for i in processed_ids if i not in known)
+        atomic_write_json(PROCESSED_FILE, {
             'last_updated': datetime.now(timezone.utc).isoformat(),
-            'processed_ids': list(processed_ids)
-        }, f, indent=2)
+            'processed_ids': combined[-MAX_PROCESSED_IDS:],
+        })
 
 
 def generate_item_id(item: dict, feed_name: str) -> str:
@@ -128,12 +158,12 @@ def generate_item_id(item: dict, feed_name: str) -> str:
     # Use link as primary ID, fallback to title+date hash
     link = item.get('link', '')
     if link:
-        return hashlib.md5(link.encode()).hexdigest()[:16]
+        return hashlib.sha256(link.encode()).hexdigest()
 
     title = item.get('title', '')
     date = item.get('published', item.get('updated', ''))
     content = f"{feed_name}:{title}:{date}"
-    return hashlib.md5(content.encode()).hexdigest()[:16]
+    return hashlib.sha256(content.encode()).hexdigest()
 
 
 def parse_feed(feed_config: dict) -> list:
@@ -154,7 +184,9 @@ def parse_feed(feed_config: dict) -> list:
     logger.info(f"Fetching: {name}")
 
     try:
-        feed = feedparser.parse(url)
+        # Bounded, public-only download (no file:// or local services), then
+        # the real parser over the bytes.
+        feed = feedparser.parse(download(url, max_bytes=MAX_FEED_BYTES))
 
         if feed.bozo and feed.bozo_exception:
             logger.warning(f"Feed parse warning for {name}: {feed.bozo_exception}")
@@ -183,9 +215,8 @@ def parse_feed(feed_config: dict) -> list:
         logger.info(f"  Found {len(items)} items from {name}")
         return items
 
-    except Exception as e:
-        logger.error(f"Failed to fetch {name}: {e}")
-        return []
+    except Exception:
+        raise ValueError(f'news feed retrieval or parsing failed: {name}') from None
 
 
 def fetch_all_feeds(config: dict, processed_ids: set) -> list:
@@ -194,7 +225,12 @@ def fetch_all_feeds(config: dict, processed_ids: set) -> list:
     all_items = []
 
     for feed_config in feeds:
-        items = parse_feed(feed_config)
+        # One unreachable feed must not cost the others their fetch.
+        try:
+            items = parse_feed(feed_config)
+        except ValueError as e:
+            logger.error(str(e))
+            continue
 
         # Filter out already processed items
         new_items = [item for item in items if item['id'] not in processed_ids]
@@ -213,31 +249,21 @@ def fetch_all_feeds(config: dict, processed_ids: set) -> list:
     return all_items
 
 
-def load_headlines() -> dict:
-    """Load existing headlines from JSON file."""
+def _store() -> NewsStore:
     _bind_paths()
-    if not HEADLINES_FILE.exists():
-        return {
-            'items': [],
-            'last_updated': None,
-            'stats': {}
-        }
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return NewsStore(HEADLINES_FILE)
 
-    try:
-        with open(HEADLINES_FILE, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.warning(f"Failed to load headlines: {e}")
-        return {'items': [], 'last_updated': None, 'stats': {}}
+
+def load_headlines() -> dict:
+    """Load existing headlines (a fresh read; malformed state raises)."""
+    return _store()._load()
 
 
 def save_headlines(headlines: dict):
-    """Save headlines to JSON file."""
-    _bind_paths()
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    with open(HEADLINES_FILE, 'w') as f:
-        json.dump(headlines, f, indent=2, default=str)
+    """Merge additions while preserving existing scores and annotations."""
+    NewsStore._validate(headlines)
+    return _store().add_items(headlines['items'])
 
 
 def score_unscored_items(store: Optional[NewsStore] = None) -> dict:
@@ -255,11 +281,12 @@ def score_unscored_items(store: Optional[NewsStore] = None) -> dict:
     sources = news_scorer.load_relevance_sources()
     high, medium = news_scorer.load_thresholds()
 
-    scored = 0
+    scores = {}
     for item in store.get_unscored_items():
-        score, tier = news_scorer.score_item(item, sources, high, medium)
-        if store.update_score(item['id'], score, tier):
-            scored += 1
+        scores[item['id']] = news_scorer.score_item(item, sources, high, medium)
+    # One locked mutation for the whole pass: a concurrent writer's items and
+    # scores survive, and an item another pass scored meanwhile is left alone.
+    scored = store.update_scores(scores)
 
     return {'status': 'success', 'scored': scored, 'stats': store.get_stats()}
 
@@ -296,64 +323,39 @@ def fetch_and_store(dry_run: bool = False) -> dict:
         item['relevance_score'] = None
         item['tier'] = None
 
-    # Load existing headlines and merge
-    headlines = load_headlines()
-    existing_ids = {item['id'] for item in headlines.get('items', [])}
+    # Merge under the store lock: a repeated feed entry cannot reset a scored
+    # item, and concurrent writers keep each other's additions and scores.
+    store = _store()
+    additions = {}
+    for item in new_items:
+        additions.setdefault(item['id'], item)
+    added = store.add_items(list(additions.values()))
 
-    # Add only truly new items
-    truly_new = [item for item in new_items if item['id'] not in existing_ids]
-
-    if truly_new:
-        headlines['items'] = truly_new + headlines.get('items', [])
-
-        # Keep only last 500 items
-        headlines['items'] = headlines['items'][:500]
-
-    # Update stats
-    headlines['last_updated'] = datetime.now(timezone.utc).isoformat()
-    headlines['stats'] = {
-        'total_items': len(headlines['items']),
-        'unscored': len([i for i in headlines['items'] if i.get('relevance_score') is None]),
-        'high_tier': len([i for i in headlines['items'] if i.get('tier') == 'high']),
-        'medium_tier': len([i for i in headlines['items'] if i.get('tier') == 'medium']),
-        'low_tier': len([i for i in headlines['items'] if i.get('tier') == 'low']),
-        'by_category': {},
-        'by_source': {},
-    }
-
-    # Count by category and source
-    for item in headlines['items']:
-        cat = item.get('category', 'unknown')
-        src = item.get('source', 'unknown')
-        headlines['stats']['by_category'][cat] = headlines['stats']['by_category'].get(cat, 0) + 1
-        headlines['stats']['by_source'][src] = headlines['stats']['by_source'].get(src, 0) + 1
-
-    # Save
-    save_headlines(headlines)
+    # Keep the newest STORE_MAX_ITEMS. Items over the cap are archived beside
+    # the store before it is published without them -- never silently dropped.
+    store.cleanup_old_items(max_age_days=None, max_items=STORE_MAX_ITEMS)
+    stats = store.get_stats()
 
     # Scoring must never cost us the fetch: the items are on disk above and stay
     # scorable on the next run, so a scorer fault is logged and nothing else.
     try:
-        scoring = score_unscored_items()
-        headlines['stats'] = scoring['stats']
+        scoring = score_unscored_items(store)
+        stats = scoring['stats']
     except Exception as e:
         logger.error(f"Scoring pass failed, items left unscored: {e}")
         scoring = {'status': 'error', 'error': str(e), 'scored': 0}
 
-    # Update processed IDs
-    new_processed = processed_ids | {item['id'] for item in new_items}
-    # Keep only last 2000 processed IDs to prevent unbounded growth
-    if len(new_processed) > 2000:
-        new_processed = set(list(new_processed)[-2000:])
-    save_processed_items(new_processed)
+    # Publication precedes fetch-history acknowledgement. A crash here retries
+    # idempotently against the retained authoritative items.
+    save_processed_items({item['id'] for item in new_items})
 
     return {
         'status': 'success',
-        'new_items_count': len(truly_new),
-        'total_items': len(headlines['items']),
+        'new_items_count': added,
+        'total_items': stats.get('total_items', 0),
         'scored_count': scoring.get('scored', 0),
         'scoring_status': scoring.get('status'),
-        'stats': headlines['stats']
+        'stats': stats
     }
 
 

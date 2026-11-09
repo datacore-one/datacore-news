@@ -23,6 +23,23 @@ cp examples/feeds.example.yaml "$(python3 lib/news_paths.py --create)/feeds.loca
 # Edit with your sources
 ```
 
+Mutable files live in the selected space's private
+`.datacore/module-data/news/data/` (`DATACORE_SPACE`, default `personal`):
+`feeds.local.yaml`, `headlines.json` and `.processed_items.json`. Do not
+overwrite a configured feed list. A legacy `data/` beside the module code blocks
+use until writers are stopped and core's `module_data_migrate.py` has moved it.
+
+## State preservation
+
+Writers take a lock, re-read the store and publish a complete file atomically,
+so concurrent fetchers, scorers and newsletter imports keep each other's work.
+Retries deduplicate identities and URLs without erasing scores or annotations.
+Stale snapshot writers and malformed state fail explicitly instead of being
+reset to empty. The store keeps the newest 500 items; anything past that, and
+anything removed by explicit retention, is first written to a private
+`archive/` beside `headlines.json` (back it up and prune it yourself). A store
+over 16 MB refuses new writes instead of silently discarding old data.
+
 ## How It Works
 
 1. Check if feeds are fresh (<1 hour)
@@ -59,8 +76,16 @@ demote_keywords:
 
 ## Dependencies
 
-- Python 3.8+
-- feedparser (`pip install feedparser`)
+- Python 3.10+ and a Datacore core (`.datacore/lib`, or `DATACORE_LIB`) with
+  `module_context.py`, `file_utils.py`, `public_download.py` and `yaml_safety.py`.
+- feedparser and PyYAML (`requirements.txt`; the fetcher activates core's
+  `.datacore/venv` when run as a bare `python3`).
+
+RSS downloads use core's bounded transport and refuse local/private targets.
+Tests use synthetic RSS through the real parser and disposable stores; they do
+not contact live feeds. Run them with `DATACORE_LIB` pointing at a core checkout:
+`python -m pytest -q` (covers `lib/tests` and `tests`; CI runs `tests`). CI pins the matching core
+commit; `requirements-test.txt` is its hash-locked test environment.
 
 ## Optional Integrations
 
