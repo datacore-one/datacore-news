@@ -215,8 +215,9 @@ def parse_feed(feed_config: dict) -> list:
         logger.info(f"  Found {len(items)} items from {name}")
         return items
 
-    except Exception:
-        raise ValueError(f'news feed retrieval or parsing failed: {name}') from None
+    except Exception as e:
+        # The kind of fault is named (never its text: that can carry a URL).
+        raise ValueError(f'news feed retrieval or parsing failed: {name} ({type(e).__name__})') from None
 
 
 def fetch_all_feeds(config: dict, processed_ids: set) -> list:
@@ -224,12 +225,18 @@ def fetch_all_feeds(config: dict, processed_ids: set) -> list:
     feeds = config.get('feeds', [])
     all_items = []
 
+    tried, failures = 0, []
     for feed_config in feeds:
+        if not feed_config.get('enabled', True) or not feed_config.get('url'):
+            parse_feed(feed_config)      # logs why it is skipped
+            continue
+        tried += 1
         # One unreachable feed must not cost the others their fetch.
         try:
             items = parse_feed(feed_config)
         except ValueError as e:
             logger.error(str(e))
+            failures.append(str(e))
             continue
 
         # Filter out already processed items
@@ -241,6 +248,12 @@ def fetch_all_feeds(config: dict, processed_ids: set) -> list:
         all_items.extend(new_items)
 
     # Sort by published date (newest first)
+    # EVERY feed failing is not "success, 0 new": that is this machine unable to
+    # fetch at all (2026-11-17: outbound access through a proxy the downloader
+    # does not use; seven of seven refused and the run reported success).
+    if tried and len(failures) == tried:
+        raise ValueError(f'all {tried} feeds failed; first: {failures[0]}')
+
     all_items.sort(
         key=lambda x: x.get('published') or '0',
         reverse=True
