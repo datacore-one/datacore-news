@@ -162,3 +162,46 @@ def test_unsafe_state_cannot_be_read_or_replaced(stored, kind):
     with pytest.raises((ValueError, OSError)):
         news_store.NewsStore(stored).update_score('a', 80, 'high')
     assert source.read_bytes() == original
+
+
+# ---- one repeated record must not stop the news (2026-11-17) -------------------
+#
+# A stored file that held one identity twice made every read raise, so every
+# nightly fetch failed from 2026-11-09 on and the briefing had no news for
+# eight days. The repeat is set aside and kept; everything else goes on.
+
+@pytest.fixture
+def repeated(tmp_path):
+    path = tmp_path / 'headlines.json'
+    path.write_text(json.dumps({'metadata': 'retained', 'items': [
+        {'id': 'a', 'title': 'First', 'relevance_score': None},
+        {'id': 'b', 'title': 'Second', 'relevance_score': None},
+        {'id': 'a', 'title': 'First', 'relevance_score': 80, 'tier': 'high'}]}))
+    return path
+
+
+def test_a_repeated_identity_is_read_once_and_reading_changes_nothing(repeated):
+    before = repeated.read_text()
+    items = news_store.NewsStore(repeated).get_all_items()
+    assert sorted(i['id'] for i in items) == ['a', 'b']
+    assert [i for i in items if i['id'] == 'a'][0]['relevance_score'] == 80, 'the scored copy is the one kept'
+    assert repeated.read_text() == before
+
+
+def test_the_next_write_repairs_the_store_and_keeps_the_copy_it_set_aside(repeated):
+    store = news_store.NewsStore(repeated)
+    assert store.add_items([{'id': 'c', 'title': 'New', 'link': 'https://example.invalid/new'}]) == 1
+    data = json.loads(repeated.read_text())
+    assert sorted(i['id'] for i in data['items']) == ['a', 'b', 'c'] and data['metadata'] == 'retained'
+    aside = repeated.parent / 'archive' / 'repeated-identities.jsonl'
+    kept = [json.loads(line) for line in aside.read_text().splitlines()]
+    assert [k['id'] for k in kept] == ['a'] and kept[0]['relevance_score'] is None
+
+
+def test_a_record_with_no_identity_still_refuses(tmp_path):
+    path = tmp_path / 'headlines.json'
+    bad = json.dumps({'items': [{'title': 'no id'}]})
+    path.write_text(bad)
+    with pytest.raises(ValueError):
+        news_store.NewsStore(path).get_all_items()
+    assert path.read_text() == bad

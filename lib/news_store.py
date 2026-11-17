@@ -37,6 +37,7 @@ class NewsStore:
         self.headlines_file = Path(headlines_file)
         self._data = None
         self._loaded_raw = None
+        self._set_aside = []
 
     @staticmethod
     def _validate(data):
@@ -55,7 +56,44 @@ class NewsStore:
         raw = read_text(path.parent.resolve(strict=True), path.parent.resolve(strict=True) / path.name,
                         limit=MAX_STORE_BYTES)
         data = {'items': [], 'last_updated': None, 'stats': {}} if raw is None else parse_json(raw)
+        self._set_aside = self._set_repeats_aside(data)
         return self._validate(data), raw
+
+    @staticmethod
+    def _set_repeats_aside(data) -> list:
+        """Take later copies of an identity out of `data`; return them.
+
+        ONE REPEATED RECORD MUST NOT STOP THE NEWS. A stored file that held one
+        identity twice made every read raise, so every nightly fetch failed for
+        eight days (2026-11-09..17) and the briefing had no news. Of two copies
+        the scored one stays. Nothing is written here: the next mutation
+        publishes the repaired store and keeps the copies it set aside
+        (`archive/repeated-identities.jsonl`). A record with no usable identity
+        is still refused by `_validate`: there is nothing to tell it apart by.
+        """
+        if not isinstance(data, dict) or not isinstance(data.get('items'), list):
+            return []
+        kept, aside = {}, []
+        for item in data['items']:
+            key = item.get('id') if isinstance(item, dict) else None
+            if not isinstance(key, str) or not key or key not in kept:
+                kept[key if isinstance(key, str) and key else object()] = item
+            elif kept[key].get('relevance_score') is None and item.get('relevance_score') is not None:
+                aside.append(kept[key])
+                kept[key] = item
+            else:
+                aside.append(item)
+        if aside:
+            data['items'] = list(kept.values())
+        return aside
+
+    def _keep_set_aside(self):
+        archive = self.headlines_file.parent / 'archive'
+        archive.mkdir(mode=0o700, exist_ok=True)
+        with open(archive / 'repeated-identities.jsonl', 'a', encoding='utf-8') as fh:
+            for item in self._set_aside:
+                fh.write(json.dumps(item, ensure_ascii=False) + '\n')
+        self._set_aside = []
 
     def _load(self) -> dict:
         self._data, self._loaded_raw = self._read()
@@ -86,7 +124,10 @@ class NewsStore:
             self._load()
             before = json.dumps(self._data, sort_keys=True)
             result = change(self._data)
-            if json.dumps(self._data, sort_keys=True) != before:
+            repaired = bool(self._set_aside)
+            if repaired:
+                self._keep_set_aside()          # kept before the store is published without them
+            if repaired or json.dumps(self._data, sort_keys=True) != before:
                 self._publish()
             return result
 
