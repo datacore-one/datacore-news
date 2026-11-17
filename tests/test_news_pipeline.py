@@ -105,3 +105,30 @@ def test_newsletter_retries_keep_existing_scores_and_use_selected_inbox(news, tm
     outside.write_text(inbox.read_text())
     with pytest.raises(ValueError):
         newsletters.read_inbox_items(outside)
+
+
+# ---- every feed failing is a failed fetch, not "success, 0 new" (2026-11-17) ----
+#
+# On a machine whose outbound access went through a proxy the downloader does
+# not use, all seven feeds failed and the run still reported success.
+
+def _refused(*a, **k):
+    raise ConnectionRefusedError(111, 'Connection refused')
+
+
+def test_when_every_feed_fails_the_fetch_fails_and_says_why(news, monkeypatch):
+    monkeypatch.setattr(feeds, 'load_feeds_config', lambda: {'feeds': [
+        {'name': 'one', 'url': 'https://example.invalid/1'}, {'name': 'two', 'url': 'https://example.invalid/2'}]})
+    monkeypatch.setattr(feeds, 'download', _refused)
+    with pytest.raises(ValueError, match=r'all 2 feeds failed.*ConnectionRefusedError'):
+        feeds.fetch_and_store()
+
+
+def test_one_feed_failing_does_not_fail_the_fetch(news, monkeypatch):
+    raw = (b'<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>'
+           b'<item><title>A story</title><link>https://example.invalid/a</link></item></channel></rss>')
+    monkeypatch.setattr(feeds, 'load_feeds_config', lambda: {'feeds': [
+        {'name': 'bad', 'url': 'https://example.invalid/1'}, {'name': 'good', 'url': 'https://example.invalid/2'}]})
+    monkeypatch.setattr(feeds, 'download', lambda url, **k: _refused() if url.endswith('/1') else raw)
+    monkeypatch.setattr(feeds, 'score_unscored_items', lambda store=None: {'status': 'success', 'scored': 0, 'stats': store.get_stats()})
+    assert feeds.fetch_and_store()['new_items_count'] == 1
